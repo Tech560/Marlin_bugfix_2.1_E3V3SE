@@ -99,6 +99,12 @@ enum processID : uint8_t {
 #if ENABLED(BED_LEVEL_VISUALIZER)
   BedLevelView,
 #endif
+#if ENABLED(DWIN_MESH_HISTORY)
+  MeshHistory,
+#endif
+#if ENABLED(DWIN_DIAG_LOG)
+  DiagLogView,
+#endif
   Tune,
   #if HAS_PREHEAT
     PLAPreheat,

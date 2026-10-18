@@ -109,7 +109,7 @@
        //#define SHOW_CUSTOM_BOOTSCREEN    // Show the bitmap in Marlin/_Bootscreen.h on startup.
      #endif
    #endif
-@@ -1785,6 +1776,18 @@
+@@ -1785,5 +1776,32 @@
        //#define NEO2_USER_PRESET_STARTUP      // Have the printer display the user preset color on startup for the second strip
      #endif
    #endif
@@ -125,7 +125,21 @@
 +#endif
 +#if ENABLED(BED_LEVEL_VISUALIZER) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(AUTO_BED_LEVELING_BILINEAR))
 +  #error "BED_LEVEL_VISUALIZER requires DWIN_CREALITY_LCD and AUTO_BED_LEVELING_BILINEAR."
- 
++#endif
++
++// Keep the last few bed meshes on the SD card and show the drift between them
++// in Leveling > Mesh History. Needs the Creality DWIN screen and bilinear ABL.
++#define DWIN_MESH_HISTORY
++#if ENABLED(DWIN_MESH_HISTORY) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(AUTO_BED_LEVELING_BILINEAR))
++  #error "DWIN_MESH_HISTORY requires DWIN_CREALITY_LCD and AUTO_BED_LEVELING_BILINEAR."
++#endif
++
++// Remember the last events (halts, failed Z offset) and write them to diag.log
++// from Control > Diagnostics.
++#define DWIN_DIAG_LOG
++#if ENABLED(DWIN_DIAG_LOG) && !ENABLED(DWIN_CREALITY_LCD)
++  #error "DWIN_DIAG_LOG requires the Creality DWIN screen."
++
  #endif // HAS_DISPLAY
  
 @@ -1870,10 +1873,12 @@

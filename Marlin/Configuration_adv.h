@@ -1803,6 +1803,20 @@
   #error "BED_LEVEL_VISUALIZER requires DWIN_CREALITY_LCD and AUTO_BED_LEVELING_BILINEAR."
 #endif
 
+// Keep the last few bed meshes on the SD card and show the drift between them
+// in Leveling > Mesh History. Needs the Creality DWIN screen and bilinear ABL.
+#define DWIN_MESH_HISTORY
+#if ENABLED(DWIN_MESH_HISTORY) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(AUTO_BED_LEVELING_BILINEAR))
+  #error "DWIN_MESH_HISTORY requires DWIN_CREALITY_LCD and AUTO_BED_LEVELING_BILINEAR."
+#endif
+
+// Remember the last events (halts, failed Z offset) and write them to diag.log
+// from Control > Diagnostics.
+#define DWIN_DIAG_LOG
+#if ENABLED(DWIN_DIAG_LOG) && !ENABLED(DWIN_CREALITY_LCD)
+  #error "DWIN_DIAG_LOG requires the Creality DWIN screen."
+#endif
+
 // Some displays offer Feedrate / Flow editing.
 #if ANY(HAS_MARLINUI_MENU, DWIN_CREALITY_LCD, DWIN_LCD_PROUI, MALYAN_LCD, TOUCH_SCREEN, ULTIPANEL_FEEDMULTIPLY)
   #define SPEED_EDIT_MIN    10  // (%) Feedrate percentage edit range minimum

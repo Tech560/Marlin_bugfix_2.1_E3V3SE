@@ -17,6 +17,9 @@
 #include "../feature/bedlevel/abl/bbl.h"
 #include "AutoOffset.h"
 #include "../lcd/dwin/creality/dwin.h"
+#if ENABLED(DWIN_DIAG_LOG)
+  #include "DiagLog.h"
+#endif
 
 
 /**
@@ -77,5 +80,6 @@ void GcodeSuite::M8015()
     checkkey=POPUP_CONFIRM;
     Popup_window_boot(High_faild_clear);//An interface pops up indicating that the height adjustment failed.
     SERIAL_ECHOLNPGM("M8015 failed to get Z offset.");
+    TERN_(DWIN_DIAG_LOG, diag_note(PSTR("M8015 Z offset failed")));
   }
 }

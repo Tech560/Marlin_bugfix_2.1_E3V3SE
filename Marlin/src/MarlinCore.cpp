@@ -60,6 +60,9 @@
 
 #include "feature/pause.h"
 #include "sd/cardreader.h"
+#if ENABLED(DWIN_DIAG_LOG)
+  #include "e3v3se/DiagLog.h"
+#endif
 
 #include "lcd/marlinui.h"
 #if HAS_TOUCH_BUTTONS
@@ -928,6 +931,9 @@ void Marlin::kill(FSTR_P const lcd_error/*=nullptr*/, FSTR_P const lcd_component
 
   // Echo the LCD message to serial for extra context
   if (lcd_error) { SERIAL_ECHO_START(); SERIAL_ECHOLN(lcd_error); }
+
+  // Remember the halt so the Diagnostics screen can show it after a reset.
+  TERN_(DWIN_DIAG_LOG, diag_note(lcd_error ? (PGM_P)lcd_error : PSTR("printer halted")));
 
   #if HAS_DISPLAY
     #if ENABLED(DWIN_CREALITY_LCD)

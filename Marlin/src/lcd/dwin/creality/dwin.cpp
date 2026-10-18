@@ -58,6 +58,12 @@ lin 3D Printer Firmware
 #if ENABLED(DWIN_INPUT_SHAPING_MENU)
 #include "../../../module/ft_motion.h"
 #endif
+#if ENABLED(DWIN_MESH_HISTORY)
+#include "../../../e3v3se/MeshHistoryStore.h"
+#endif
+#if ENABLED(DWIN_DIAG_LOG)
+#include "../../../e3v3se/DiagLog.h"
+#endif
 #if ENABLED(HOST_ACTION_COMMANDS)
 #include "../../../feature/host_actions.h"
 #endif
@@ -1566,10 +1572,13 @@ inline bool Apply_Encoder(const ENCODER_DiffState &encoder_diffState, T &valref)
 #define CONTROL_CASE_INFO (CONTROL_CASE_RESET + 1)
 #define CONTROL_CASE_STATS (CONTROL_CASE_INFO + 1)
 #define CONTROL_CASE_PLR (CONTROL_CASE_STATS + ENABLED(DWIN_PLR_MENU))
-#define CONTROL_CASE_TOTAL CONTROL_CASE_PLR
+#define CONTROL_CASE_DIAG (CONTROL_CASE_PLR + ENABLED(DWIN_DIAG_LOG))
+#define CONTROL_CASE_TOTAL CONTROL_CASE_DIAG
 
 #define LEVEL_CASE_BEDVIS 4
-#define LEVEL_CASE_TOTAL (3 + ENABLED(BED_LEVEL_VISUALIZER))
+#define LEVEL_CASE_MESH      (3 + ENABLED(BED_LEVEL_VISUALIZER) + ENABLED(DWIN_MESH_HISTORY))
+#define LEVEL_CASE_MESH_SAVE (LEVEL_CASE_MESH + ENABLED(DWIN_MESH_HISTORY))
+#define LEVEL_CASE_TOTAL     (3 + ENABLED(BED_LEVEL_VISUALIZER) + 2 * ENABLED(DWIN_MESH_HISTORY))
 
 #define TUNE_CASE_SPEED 1
 #define TUNE_CASE_TEMP (TUNE_CASE_SPEED + ENABLED(HAS_HOTEND))
@@ -2084,6 +2093,19 @@ void Item_Control_Stats(const uint8_t row)
   Draw_More_Icon(row);
 }
 
+#if ENABLED(DWIN_DIAG_LOG)
+void Item_Control_Diag(const uint8_t row)
+{
+  Erase_Menu_Text(row);
+  if (HMI_flag.language < Language_Max)
+  {
+    DWIN_Draw_Label(MBASE(row), F("Diagnostics"));
+  }
+  Draw_Menu_Line(row, ICON_Info);
+  Draw_More_Icon(row);
+}
+#endif
+
 #if ENABLED(DWIN_PLR_MENU)
   void Item_Control_PLR(const uint8_t row) {
     Erase_Menu_Text(row);
@@ -2175,6 +2197,10 @@ void Draw_Control_Menu()
 #if ENABLED(DWIN_PLR_MENU)
   if (CVISI(CONTROL_CASE_PLR))
     Item_Control_PLR(CSCROL(CONTROL_CASE_PLR));
+#endif
+#if ENABLED(DWIN_DIAG_LOG)
+  if (CVISI(CONTROL_CASE_DIAG))
+    Item_Control_Diag(CSCROL(CONTROL_CASE_DIAG));
 #endif
   if (select_control.now && CVISI(select_control.now))
     Draw_Menu_Cursor(CSCROL(select_control.now));
@@ -6044,9 +6070,26 @@ void Draw_Level_Menu(){
 #if ENABLED(BED_LEVEL_VISUALIZER)
   Item_Level_BedVisualizer(LEVEL_CASE_BEDVIS);
 #endif
+#if ENABLED(DWIN_MESH_HISTORY)
+  Erase_Menu_Text(LEVEL_CASE_MESH);
+  DWIN_Draw_Label(MBASE(LEVEL_CASE_MESH), F("Mesh History"));
+  Draw_Menu_Line(LEVEL_CASE_MESH, ICON_Edit_Level_Data);
+  Draw_More_Icon(LEVEL_CASE_MESH);
+
+  Erase_Menu_Text(LEVEL_CASE_MESH_SAVE);
+  DWIN_Draw_Label(MBASE(LEVEL_CASE_MESH_SAVE), F("Save Mesh Snapshot"));
+  Draw_Menu_Line(LEVEL_CASE_MESH_SAVE, ICON_WriteEEPROM);
+#endif
   if (select_cextr.now)
     Draw_Menu_Cursor(select_cextr.now);
 }
+
+#if ENABLED(DWIN_MESH_HISTORY)
+  void Draw_MeshHistory_Menu();
+#endif
+#if ENABLED(DWIN_DIAG_LOG)
+  void Draw_DiagLog_Menu();
+#endif
 
 void HMI_Level_Menu(){
   ENCODER_DiffState encoder_diffState = get_encoder_state();
@@ -6095,6 +6138,19 @@ void HMI_Level_Menu(){
         checkkey = BedLevelView;
         HMI_flag.Refresh_bottom_flag = true;
         BedLevelVisualizer::start();
+        break;
+#endif
+#if ENABLED(DWIN_MESH_HISTORY)
+      case LEVEL_CASE_MESH:
+        checkkey = MeshHistory;
+        HMI_flag.Refresh_bottom_flag = true;
+        Draw_MeshHistory_Menu();
+        break;
+      case LEVEL_CASE_MESH_SAVE:
+        HMI_flag.Refresh_bottom_flag = true;
+        meshHistory::save_snapshot();
+        Draw_MeshHistory_Menu();
+        checkkey = MeshHistory;
         break;
 #endif
     }
@@ -8093,6 +8149,11 @@ void HMI_Control()
           Item_Control_PLR(MROWS);
           break;
 #endif
+#if ENABLED(DWIN_DIAG_LOG)
+        case CONTROL_CASE_DIAG:
+          Item_Control_Diag(MROWS);
+          break;
+#endif
 
         default:
           break;
@@ -8179,6 +8240,14 @@ void HMI_Control()
 #if ENABLED(DWIN_PLR_MENU)
     case CONTROL_CASE_PLR:
       Goto_PLRSettings();
+      break;
+#endif
+#if ENABLED(DWIN_DIAG_LOG)
+    case CONTROL_CASE_DIAG:
+      checkkey = DiagLogView;
+      HMI_flag.Refresh_bottom_flag = true;
+      diag_flush();                       // save whatever we have, when idle
+      Draw_DiagLog_Menu();
       break;
 #endif
     case 0: // Back
@@ -10216,6 +10285,92 @@ void HMI_Pstats()
   }
   DWIN_UpdateLCD();
 }
+
+#if ENABLED(DWIN_MESH_HISTORY)
+/* Mesh History */
+void Draw_MeshHistory_Menu() {
+  Clear_Main_Window();
+  HMI_flag.Refresh_bottom_flag = true;
+  Draw_Back_First();
+
+  DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
+                   (DWIN_WIDTH - strlen("Mesh History") * MENU_CHR_W) / 2, 4, F("Mesh History"));
+
+  char text[48];
+  const uint8_t snapshots = meshHistory::stored();
+  if (snapshots)
+    snprintf_P(text, sizeof(text), PSTR("Snapshots %u  prints %lu"),
+               snapshots, (unsigned long)meshHistory::last_prints());
+  else
+    strcpy_P(text, PSTR("No snapshots on SD"));
+  DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 40, text);
+
+  int8_t delta[MESH_HISTORY_POINTS];
+  if (meshHistory::last_deltas(delta)) {
+    // One line per mesh row, each value in micrometres.
+    for (uint8_t row = 0; row < GRID_MAX_POINTS_Y; ++row) {
+      mesh_format_row(&delta[row * GRID_MAX_POINTS_X], GRID_MAX_POINTS_X, text, sizeof(text));
+      DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 30, 70 + row * 16, text);
+    }
+    int16_t max_um, avg_um;
+    if (meshHistory::drift(max_um, avg_um)) {
+      snprintf_P(text, sizeof(text), PSTR("Drift max %ium avg %ium"), max_um, avg_um);
+      DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 180, text);
+    }
+  }
+  else
+    DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 80, F("Need two snapshots"));
+
+  DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 220, F("ENTER = back"));
+}
+
+void HMI_MeshHistory() {
+  if (get_encoder_state() == ENCODER_DIFF_ENTER) {
+    checkkey = Level;
+    select_cextr.set(LEVEL_CASE_MESH);
+    Draw_Level_Menu();
+  }
+  DWIN_UpdateLCD();
+}
+#endif // DWIN_MESH_HISTORY
+
+#if ENABLED(DWIN_DIAG_LOG)
+/* Diagnostics */
+void Draw_DiagLog_Menu() {
+  Clear_Main_Window();
+  HMI_flag.Refresh_bottom_flag = true;
+  Draw_Back_First();
+
+  DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
+                   (DWIN_WIDTH - strlen("Diagnostics") * MENU_CHR_W) / 2, 4, F("Diagnostics"));
+
+  const uint8_t lines = diag_count();
+  if (lines) {
+    char text[DIAG_LINE_LEN];
+    for (uint8_t i = 0; i < lines && i < DIAG_LINES; ++i) {
+      // DWIN_Draw_String wants a mutable buffer, so hand it a copy.
+      strncpy(text, diag_line(i), sizeof(text) - 1);
+      text[sizeof(text) - 1] = '\0';
+      DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 8, 40 + i * 14, text);
+    }
+  }
+  else
+    DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 8, 60, F("No events recorded"));
+
+  DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 8, 200, F("Log written to diag.log"));
+  DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 8, 220, F("ENTER = back"));
+}
+
+void HMI_DiagLogView() {
+  if (get_encoder_state() == ENCODER_DIFF_ENTER) {
+    checkkey = Control;
+    select_control.set(CONTROL_CASE_DIAG);
+    index_control = CONTROL_CASE_DIAG;
+    Draw_Control_Menu();
+  }
+  DWIN_UpdateLCD();
+}
+#endif // DWIN_DIAG_LOG
 
 #if ENABLED(BED_LEVEL_VISUALIZER)
   static void HMI_BedLevelVisualizer() {
@@ -12341,6 +12496,16 @@ void DWIN_HandleScreen()
 #if ENABLED(BED_LEVEL_VISUALIZER)
   case BedLevelView:
     HMI_BedLevelVisualizer();
+    break;
+#endif
+#if ENABLED(DWIN_MESH_HISTORY)
+  case MeshHistory:
+    HMI_MeshHistory();
+    break;
+#endif
+#if ENABLED(DWIN_DIAG_LOG)
+  case DiagLogView:
+    HMI_DiagLogView();
     break;
 #endif
   case Level:
