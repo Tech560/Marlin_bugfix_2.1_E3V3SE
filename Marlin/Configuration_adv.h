@@ -1188,6 +1188,7 @@
 #if ENABLED(FT_MOTION)
   #define FTM_IS_DEFAULT_MOTION// Use FT Motion as the factory default?
   //#define FT_MOTION_MENU                      // Provide a MarlinUI menu to set M493 and M494 parameters
+  #define DWIN_INPUT_SHAPING_MENU               // LCD menu to tune the FT Motion input shaper (frequency and damping per axis)
 
   //#define NO_STANDARD_MOTION                  // Disable the standard motion system entirely to save Flash and RAM
     //#define FTM_HOME_AND_PROBE                // Use FT Motion for homing / probing. Disable if FT Motion breaks these functions.
@@ -1306,7 +1307,8 @@
 //#define INPUT_SHAPING_Y
 //#define INPUT_SHAPING_Z
 #if ANY(INPUT_SHAPING_X, INPUT_SHAPING_Y, INPUT_SHAPING_Z)
-  // #define DWIN_INPUT_SHAPING_MENU        // Enable LCD Menu to Configure Input Shaping parameters
+  // The LCD shaping menu lives in the FT_MOTION block above; these legacy
+  // shapers have no LCD menu of their own.
   #if ENABLED(INPUT_SHAPING_X)
     #define SHAPING_FREQ_X  42.0        // (Hz) The default dominant resonant frequency on the X axis.
     #define SHAPING_ZETA_X   0.15       // Damping ratio of the X axis (range: 0.0 = no damping to 1.0 = critical damping).

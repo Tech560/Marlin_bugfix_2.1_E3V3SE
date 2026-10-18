@@ -33,8 +33,9 @@
      // Specify up to one value per hotend here, according to your setup.
      // If there are fewer values, the last one applies to the remaining hotends.
      //#define DEFAULT_KF_LIST { DEFAULT_KF, DEFAULT_KF }
-@@ -1181,14 +1180,10 @@
+@@ -1181,14 +1180,11 @@
    //#define FT_MOTION_MENU                      // Provide a MarlinUI menu to set M493 and M494 parameters
++  #define DWIN_INPUT_SHAPING_MENU               // LCD menu to tune the FT Motion input shaper (frequency and damping per axis)
  
    //#define NO_STANDARD_MOTION                  // Disable the standard motion system entirely to save Flash and RAM
 -  #if DISABLED(NO_STANDARD_MOTION)

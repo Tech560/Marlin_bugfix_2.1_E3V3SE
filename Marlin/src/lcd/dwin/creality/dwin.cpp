@@ -55,6 +55,9 @@ lin 3D Printer Firmware
 #if ENABLED(EEPROM_SETTINGS)
 #include "../../../module/settings.h"
 #endif
+#if ENABLED(DWIN_INPUT_SHAPING_MENU)
+#include "../../../module/ft_motion.h"
+#endif
 #if ENABLED(HOST_ACTION_COMMANDS)
 #include "../../../feature/host_actions.h"
 #endif
@@ -4802,6 +4805,12 @@ void HMI_MaxJerkXYZE()
 #endif // Has classic jerk
 
 #if ENABLED(DWIN_INPUT_SHAPING_MENU)
+  // The LCD menu edits the FT Motion shaper: frequency in Hz, damping as a ratio.
+  static inline float shaping_freq(const AxisEnum a) { return ftMotion.cfg.baseFreq[a]; }
+  static inline float shaping_zeta(const AxisEnum a) { return ftMotion.cfg.zeta[a]; }
+  static inline void set_shaping_freq(const AxisEnum a, const float hz) { ftMotion.cfg.setBaseFreq(a, hz); }
+  static inline void set_shaping_zeta(const AxisEnum a, const float zeta) { ftMotion.cfg.setZeta(a, zeta); }
+
   void HMI_InputShaping_Values()
   {
     ENCODER_DiffState encoder_diffState = Encoder_ReceiveAnalyze();
@@ -4816,9 +4825,9 @@ void HMI_MaxJerkXYZE()
         checkkey = InputShaping;
         EncoderRate.enabled = false;
         NOLESS(HMI_ValueStruct.InputShaping_scaled, 0.0f);
-        stepper.set_shaping_frequency(X_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
+        set_shaping_freq(X_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
 
-        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XFREQ) + 3, _MAX(HMI_ValueStruct.InputShaping_scaled, 0.0));
+        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XFREQ) + 3, shaping_freq(X_AXIS) * 100);
         return;
       }
 
@@ -4831,9 +4840,9 @@ void HMI_MaxJerkXYZE()
         checkkey = InputShaping;
         EncoderRate.enabled = false;
         NOLESS(HMI_ValueStruct.InputShaping_scaled, 0.0f);
-        stepper.set_shaping_frequency(Y_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
+        set_shaping_freq(Y_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
 
-        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YFREQ) + 3, _MAX(HMI_ValueStruct.InputShaping_scaled, 0.0));
+        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YFREQ) + 3, shaping_freq(Y_AXIS) * 100);
         return;
       }
 
@@ -4846,9 +4855,9 @@ void HMI_MaxJerkXYZE()
         checkkey = InputShaping;
         EncoderRate.enabled = false;
         LIMIT(HMI_ValueStruct.InputShaping_scaled, 0.0f, 100.0f);
-        stepper.set_shaping_damping_ratio(X_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
+        set_shaping_zeta(X_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
 
-        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XZETA) + 3, _MAX(HMI_ValueStruct.InputShaping_scaled, 0.0));
+        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XZETA) + 3, shaping_zeta(X_AXIS) * 100);
         return;
       }
       LIMIT(HMI_ValueStruct.InputShaping_scaled, 0.0f, 100.0f);
@@ -4861,9 +4870,9 @@ void HMI_MaxJerkXYZE()
         checkkey = InputShaping;
         EncoderRate.enabled = false;
         LIMIT(HMI_ValueStruct.InputShaping_scaled, 0.0f, 100.0f);
-        stepper.set_shaping_damping_ratio(Y_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
+        set_shaping_zeta(Y_AXIS, HMI_ValueStruct.InputShaping_scaled / 100);
 
-        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YZETA) + 3, _MAX(HMI_ValueStruct.InputShaping_scaled, 0.0));
+        DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YZETA) + 3, shaping_zeta(Y_AXIS) * 100);
         return;
       }
       LIMIT(HMI_ValueStruct.InputShaping_scaled, 0.0f, 100.0f);
@@ -4874,7 +4883,7 @@ void HMI_MaxJerkXYZE()
 
     DWIN_UpdateLCD();
 }
-#endif // ENABLED(INPUT_SHAPING_X) && ENABLED(INPUT_SHAPING_Y)
+#endif // DWIN_INPUT_SHAPING_MENU
 
 ////
 // void HMI_LinearAdv_KFactor()
@@ -9660,15 +9669,15 @@ void Draw_Steps_Menu()
     Draw_Menu_Line(INPUT_SHAPING_CASE_XZETA, ICON_MaxSpeedX);
     Draw_Menu_Line(INPUT_SHAPING_CASE_YZETA, ICON_MaxSpeedY);
   #if ENABLED(DWIN_CREALITY_480_LCD)
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XFREQ) + 3, stepper.get_shaping_frequency(X_AXIS) * 100);
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YFREQ) + 3, stepper.get_shaping_frequency(Y_AXIS) * 100);
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XZETA) + 3, stepper.get_shaping_damping_ratio(X_AXIS) * 100);
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YZETA) + 3, stepper.get_shaping_damping_ratio(Y_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XFREQ) + 3, shaping_freq(X_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YFREQ) + 3, shaping_freq(Y_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XZETA) + 3, shaping_zeta(X_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YZETA) + 3, shaping_zeta(Y_AXIS) * 100);
   #elif ENABLED(DWIN_CREALITY_320_LCD)
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XFREQ) + 3, stepper.get_shaping_frequency(X_AXIS) * 100);
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YFREQ) + 3, stepper.get_shaping_frequency(Y_AXIS) * 100);
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XZETA) + 3, stepper.get_shaping_damping_ratio(X_AXIS) * 100);
-    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YZETA) + 3, stepper.get_shaping_damping_ratio(Y_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XFREQ) + 3, shaping_freq(X_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YFREQ) + 3, shaping_freq(Y_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XZETA) + 3, shaping_zeta(X_AXIS) * 100);
+    DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YZETA) + 3, shaping_zeta(Y_AXIS) * 100);
   #endif
   }
 #endif
@@ -10977,25 +10986,25 @@ void HMI_MaxAcceleration()
         break;
       case INPUT_SHAPING_CASE_XFREQ:
         checkkey = InputShaping_XFreq;
-        HMI_ValueStruct.InputShaping_scaled = stepper.get_shaping_frequency(X_AXIS) * 100;
+        HMI_ValueStruct.InputShaping_scaled = shaping_freq(X_AXIS) * 100;
         DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Select_Color, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XFREQ) + 3, HMI_ValueStruct.InputShaping_scaled);
         EncoderRate.enabled = true;
         break;
       case INPUT_SHAPING_CASE_YFREQ:
         checkkey = InputShaping_YFreq;
-        HMI_ValueStruct.InputShaping_scaled = stepper.get_shaping_frequency(Y_AXIS) * 100;
+        HMI_ValueStruct.InputShaping_scaled = shaping_freq(Y_AXIS) * 100;
         DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Select_Color, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YFREQ) + 3, HMI_ValueStruct.InputShaping_scaled);
         EncoderRate.enabled = true;
         break;
       case INPUT_SHAPING_CASE_XZETA:
         checkkey = InputShaping_XZeta;
-        HMI_ValueStruct.InputShaping_scaled = stepper.get_shaping_damping_ratio(X_AXIS) * 100;
+        HMI_ValueStruct.InputShaping_scaled = shaping_zeta(X_AXIS) * 100;
         DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Select_Color, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_XZETA) + 3, HMI_ValueStruct.InputShaping_scaled);
         EncoderRate.enabled = true;
         break;
       case INPUT_SHAPING_CASE_YZETA:
         checkkey = InputShaping_YZeta;
-        HMI_ValueStruct.InputShaping_scaled = stepper.get_shaping_damping_ratio(Y_AXIS) * 100;
+        HMI_ValueStruct.InputShaping_scaled = shaping_zeta(Y_AXIS) * 100;
         DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Select_Color, 2, 2, VALUERANGE_X, MBASE(INPUT_SHAPING_CASE_YZETA) + 3, HMI_ValueStruct.InputShaping_scaled);
         EncoderRate.enabled = true;
         break;

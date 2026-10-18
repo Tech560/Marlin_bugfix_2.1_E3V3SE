@@ -4819,6 +4819,8 @@ static_assert(_PLUS_TEST(3), "DEFAULT_MAX_ACCELERATION values must be positive."
   #if HAS_FTM_SHAPING && NONE(FTM_SHAPER_ZV, FTM_SHAPER_ZVD, FTM_SHAPER_ZVDD, FTM_SHAPER_ZVDDD, FTM_SHAPER_EI, FTM_SHAPER_2HEI, FTM_SHAPER_3HEI, FTM_SHAPER_MZV)
     #error "For FT_MOTION at least one FTM_SHAPER_* type must be enabled."
   #endif
+#elif ENABLED(DWIN_INPUT_SHAPING_MENU)
+  #error "DWIN_INPUT_SHAPING_MENU requires FT_MOTION (it no longer drives the legacy M593 shapers)."
 #endif // FT_MOTION
 
 /**
