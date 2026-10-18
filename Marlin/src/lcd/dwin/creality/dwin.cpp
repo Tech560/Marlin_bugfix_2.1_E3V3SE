@@ -61,6 +61,9 @@ lin 3D Printer Firmware
 #if ENABLED(DWIN_MESH_HISTORY)
 #include "../../../e3v3se/MeshHistoryStore.h"
 #endif
+#if ENABLED(DWIN_TOWER_GEN)
+#include "../../../e3v3se/TowerGen.h"
+#endif
 #if ENABLED(DWIN_DIAG_LOG)
 #include "../../../e3v3se/DiagLog.h"
 #endif
@@ -1554,9 +1557,16 @@ inline bool Apply_Encoder(const ENCODER_DiffState &encoder_diffState, T &valref)
 
 #if ENABLED(DWIN_ZHOME_MENU)  
   #define PREPARE_CASE_ZHEIGHT (_PREPARE_LAST_CASE + 1)
-  #define PREPARE_CASE_TOTAL PREPARE_CASE_ZHEIGHT
+  #define _PREPARE_CASE_AFTER_ZHEIGHT PREPARE_CASE_ZHEIGHT
 #else
-  #define PREPARE_CASE_TOTAL _PREPARE_LAST_CASE
+  #define _PREPARE_CASE_AFTER_ZHEIGHT _PREPARE_LAST_CASE
+#endif
+
+#if ENABLED(DWIN_TOWER_GEN)
+  #define PREPARE_CASE_TOWER (_PREPARE_CASE_AFTER_ZHEIGHT + 1)
+  #define PREPARE_CASE_TOTAL PREPARE_CASE_TOWER
+#else
+  #define PREPARE_CASE_TOTAL _PREPARE_CASE_AFTER_ZHEIGHT
 #endif
 
 
@@ -1966,6 +1976,21 @@ void Item_Prepare_CExtrude(const uint8_t row)
   Draw_Menu_Line(row, ICON_IN_STORK);
 }
 
+#if ENABLED(DWIN_TOWER_GEN)
+    void Item_Prepare_Tower(const uint8_t row)
+    {
+      Erase_Menu_Text(row);
+      DWIN_Draw_Label(MBASE(row) + 2, F("Temp tower"));
+      // Show the temperature span so the settings are visible before the page.
+      char range[8];
+      snprintf_P(range, sizeof(range), PSTR("%u-%u"),
+                 unsigned(towerGen::settings().start_temp),
+                 unsigned(uint16_t(towerGen::last_temp(towerGen::settings()))));
+      DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, VALUERANGE_X - 16, MBASE(row) + 3, range);
+      Draw_Menu_Line(row, ICON_HotendTemp);
+    }
+#endif
+
 #if ENABLED(DWIN_ZHOME_MENU) 
     void Item_Prepare_Homeheight(const uint8_t row)
     {
@@ -2057,6 +2082,11 @@ void Draw_Prepare_Menu()
     Item_Prepare_Homeheight(PSCROL(PREPARE_CASE_ZHEIGHT)); // Custom Z height
 #endif
 
+#if ENABLED(DWIN_TOWER_GEN)
+  if (PVISI(PREPARE_CASE_TOWER))
+    Item_Prepare_Tower(PSCROL(PREPARE_CASE_TOWER)); // Temperature tower >
+#endif
+
   if (select_prepare.now)
     Draw_Menu_Cursor(PSCROL(select_prepare.now));
 }
@@ -2115,6 +2145,10 @@ void Item_Control_Diag(const uint8_t row)
 
 #if ENABLED(DWIN_PLR_MENU)
   static void Goto_PLRSettings();
+#endif
+
+#if ENABLED(DWIN_TOWER_GEN)
+  static void Goto_TowerMenu();
 #endif
 
 static void Item_Temp_HMPID(const uint16_t line)
@@ -7993,6 +8027,12 @@ void HMI_Prepare()
       break;
 #endif
 
+#if ENABLED(DWIN_TOWER_GEN)
+    case PREPARE_CASE_TOWER: // Generate a temperature tower
+      Goto_TowerMenu();
+      break;
+#endif
+
 #if ENABLED(DWIN_ZHOME_MENU)     
     case PREPARE_CASE_ZHEIGHT: // Z height
       checkkey = ZHeight;
@@ -11699,6 +11739,152 @@ void Remove_card_window_check(void)
   }
 #endif
 
+#if ENABLED(DWIN_TOWER_GEN)
+  enum TowerMenuItem : uint8_t {
+    TOWER_BACK, TOWER_START, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT,
+    TOWER_WRITE, TOWER_PRINT
+  };
+  static select_t select_tower{0};
+  static uint8_t index_tower = MROWS, tower_edit_item = 0;
+  static int16_t tower_edit_value = 0;
+
+  static int16_t Tower_Menu_Value(const uint8_t item) {
+    switch (item) {
+      case TOWER_START:  return int16_t(towerGen::settings().start_temp);
+      case TOWER_STEP:   return int16_t(towerGen::settings().step);
+      case TOWER_BANDS:  return int16_t(towerGen::settings().bands);
+      case TOWER_BED:    return int16_t(towerGen::settings().bed_temp);
+      case TOWER_HEIGHT: return int16_t(towerGen::settings().band_mm);
+      default: return 0;
+    }
+  }
+
+  static int16_t Tower_Menu_Min(const uint8_t item) {
+    return item == TOWER_START ? 170 : item == TOWER_BANDS ? 1 : item == TOWER_HEIGHT ? 5 : 0;
+  }
+
+  static int16_t Tower_Menu_Max(const uint8_t item) {
+    switch (item) {
+      case TOWER_START:  return HEATER_0_MAXTEMP;
+      case TOWER_STEP:   return 20;
+      case TOWER_BANDS:  return 10;
+      case TOWER_BED:    return BED_MAXTEMP;
+      case TOWER_HEIGHT: return 30;
+      default: return 0;
+    }
+  }
+
+  static void Draw_Tower_Value(const uint8_t item, const uint8_t row, const bool editing=false) {
+    if (item == TOWER_BACK || item == TOWER_WRITE || item == TOWER_PRINT) return;
+    const uint16_t bg = editing ? Select_Color : Color_Bg_Black;
+    const int16_t value = editing ? tower_edit_value : Tower_Menu_Value(item);
+    DWIN_Draw_IntValue(true, true, 0, font8x16, Color_White, bg,
+                       item == TOWER_STEP || item == TOWER_BANDS || item == TOWER_HEIGHT ? 2 : 3,
+                       VALUERANGE_X, MBASE(row) + 3, uint16_t(value));
+  }
+
+  static void Draw_Tower_Menu() {
+    static const char * const labels[] = {
+      "Back", "Start C", "Step C", "Bands", "Bed C", "Band mm",
+      "Write to SD", "Write and print"
+    };
+    Clear_Main_Window();
+    Draw_Title(F("Temp tower"));
+    const uint8_t first = index_tower - MROWS;
+    for (uint8_t item = first; item <= index_tower && item <= TOWER_PRINT; ++item) {
+      const uint8_t row = item - first;
+      if (item == TOWER_BACK)
+        Draw_Back_First(select_tower.now == TOWER_BACK);
+      else {
+        Draw_Menu_Line(row, item >= TOWER_WRITE ? ICON_WriteEEPROM : ICON_HotendTemp, labels[item]);
+        Draw_Tower_Value(item, row);
+      }
+    }
+    if (select_tower.now) Draw_Menu_Cursor(select_tower.now - first);
+  }
+
+  static void Goto_TowerMenu() {
+    checkkey = TowerMenu;
+    select_tower.reset();
+    index_tower = MROWS;
+    EncoderRate.enabled = false;
+    HMI_flag.Refresh_bottom_flag = false;
+    Draw_Tower_Menu();
+  }
+
+  static void HMI_TowerMenu() {
+    const ENCODER_DiffState state = get_encoder_state();
+    if (state == ENCODER_DIFF_NO) return;
+    if (state == ENCODER_DIFF_CW || state == ENCODER_DIFF_CCW) {
+      const bool changed = state == ENCODER_DIFF_CW ? select_tower.inc(TOWER_PRINT + 1) : select_tower.dec();
+      if (changed) {
+        if (select_tower.now > index_tower || select_tower.now < index_tower - MROWS) {
+          index_tower = select_tower.now > index_tower ? select_tower.now : select_tower.now + MROWS;
+          Draw_Tower_Menu();
+        }
+        else
+          Move_Highlight(state == ENCODER_DIFF_CW ? 1 : -1, select_tower.now + MROWS - index_tower);
+      }
+    }
+    else if (state == ENCODER_DIFF_ENTER) {
+      const uint8_t item = select_tower.now;
+      switch (item) {
+        case TOWER_BACK:
+          checkkey = Prepare;
+          select_prepare.set(PREPARE_CASE_TOWER);
+          index_prepare = _MAX(uint8_t(MROWS), uint8_t(PREPARE_CASE_TOWER));
+          Draw_Prepare_Menu();
+          break;
+        case TOWER_WRITE:
+          HMI_AudioFeedback(towerGen::write_file());
+          break;
+        case TOWER_PRINT:
+          if (towerGen::start()) Goto_PrintProcess();
+          else HMI_AudioFeedback(false);
+          break;
+        default:
+          tower_edit_item = item;
+          tower_edit_value = Tower_Menu_Value(item);
+          checkkey = TowerValue;
+          EncoderRate.enabled = true;
+          Draw_Tower_Value(item, item + MROWS - index_tower, true);
+          break;
+      }
+    }
+    DWIN_UpdateLCD();
+  }
+
+  static void HMI_TowerValue() {
+    const ENCODER_DiffState state = Encoder_ReceiveAnalyze();
+    if (state == ENCODER_DIFF_NO) return;
+    if (state == ENCODER_DIFF_CW || state == ENCODER_DIFF_CCW) {
+      const int32_t step = constrain(EncoderRate.encoderMoveValue, 1, 100);
+      const int32_t next = int32_t(tower_edit_value) + (state == ENCODER_DIFF_CW ? step : -step);
+      tower_edit_value = constrain(next, Tower_Menu_Min(tower_edit_item), Tower_Menu_Max(tower_edit_item));
+    }
+    else if (state == ENCODER_DIFF_ENTER) {
+      TowerSettings &s = towerGen::settings();
+      switch (tower_edit_item) {
+        case TOWER_START:  s.start_temp = uint16_t(tower_edit_value); break;
+        case TOWER_STEP:   s.step = uint8_t(tower_edit_value); break;
+        case TOWER_BANDS:  s.bands = uint8_t(tower_edit_value); break;
+        case TOWER_BED:    s.bed_temp = uint8_t(tower_edit_value); break;
+        case TOWER_HEIGHT: s.band_mm = uint8_t(tower_edit_value); break;
+        default: break;
+      }
+      // Clamping can shorten the tower (more bands than the safe span allows).
+      towerGen::clamp(s);
+      EncoderRate.enabled = false;
+      checkkey = TowerMenu;
+      Draw_Tower_Menu();
+      DWIN_UpdateLCD();
+      return;
+    }
+    Draw_Tower_Value(tower_edit_item, tower_edit_item + MROWS - index_tower, checkkey == TowerValue);
+    DWIN_UpdateLCD();
+  }
+#endif
+
 #if ENABLED(POWER_LOSS_RECOVERY)
   static void Draw_PLR_Selection(const bool resume) {
     HMI_flag.select_flag = resume;
@@ -12506,6 +12692,14 @@ void DWIN_HandleScreen()
 #if ENABLED(DWIN_DIAG_LOG)
   case DiagLogView:
     HMI_DiagLogView();
+    break;
+#endif
+#if ENABLED(DWIN_TOWER_GEN)
+  case TowerMenu:
+    HMI_TowerMenu();
+    break;
+  case TowerValue:
+    HMI_TowerValue();
     break;
 #endif
   case Level:

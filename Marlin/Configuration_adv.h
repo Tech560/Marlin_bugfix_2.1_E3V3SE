@@ -1817,6 +1817,14 @@
   #error "DWIN_DIAG_LOG requires the Creality DWIN screen."
 #endif
 
+// Generate a temperature tower G-code file from Prepare > Temp tower (M8025).
+// The tower steps the nozzle temperature once per band so a spool can be tuned
+// without a slicer. Needs the Creality DWIN screen and a writable SD card.
+#define DWIN_TOWER_GEN
+#if ENABLED(DWIN_TOWER_GEN) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(AUTO_BED_LEVELING_BILINEAR))
+  #error "DWIN_TOWER_GEN requires the Creality DWIN screen and bilinear ABL."
+#endif
+
 // Some displays offer Feedrate / Flow editing.
 #if ANY(HAS_MARLINUI_MENU, DWIN_CREALITY_LCD, DWIN_LCD_PROUI, MALYAN_LCD, TOUCH_SCREEN, ULTIPANEL_FEEDMULTIPLY)
   #define SPEED_EDIT_MIN    10  // (%) Feedrate percentage edit range minimum

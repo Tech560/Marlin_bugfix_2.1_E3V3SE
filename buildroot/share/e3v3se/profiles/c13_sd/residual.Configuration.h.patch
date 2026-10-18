@@ -105,10 +105,12 @@
  
  // @section extruder
  
-@@ -236,6 +266,17 @@
+@@ -234,6 +264,17 @@
+ #if ENABLED(SINGLENOZZLE)
+   //#define SINGLENOZZLE_STANDBY_TEMP
    //#define SINGLENOZZLE_STANDBY_FAN
- #endif
- 
++#endif
++
 +
 +#define ENABLE_AUTO_OFF_DISPLAY             // Enable automatic turn-off display function & brightness adjustment function
 +#if ENABLED(ENABLE_AUTO_OFF_DISPLAY)
@@ -118,11 +120,9 @@
 +  extern int16_t TURN_OFF_TIME;             // turn-off time: 5min
 +  extern int16_t DIMM_SCREEN_BRIGHTNESS;    // brightness 0x00-0xff:0
 +  extern int16_t MAX_SCREEN_BRIGHTNESS;     // brightness 0x00-0xff:0
-+#endif
-+
+ #endif
+ 
  // A dual extruder that uses a single stepper motor
- //#define SWITCHING_EXTRUDER
- #if ENABLED(SWITCHING_EXTRUDER)
 @@ -303,7 +344,6 @@
  
    #endif
@@ -333,7 +333,7 @@
  
    // Or, set the XY skew factor directly:
    //#define XY_SKEW_FACTOR 0.0
-@@ -2571,6 +2669,23 @@
+@@ -2571,6 +2668,23 @@
  #define PREHEAT_2_TEMP_BED    70
  #define PREHEAT_2_TEMP_CHAMBER 35
  #define PREHEAT_2_FAN_SPEED     0 // Value from 0 to 255
@@ -357,7 +357,7 @@
  
  /**
   * @section nozzle park
-@@ -3621,10 +3736,9 @@
+@@ -3621,10 +3735,9 @@
  //#define DWIN_MARLINUI_PORTRAIT      // MarlinUI (portrait orientation)
  //#define DWIN_MARLINUI_LANDSCAPE     // MarlinUI (landscape orientation)
  

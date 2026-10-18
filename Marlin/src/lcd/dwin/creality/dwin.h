@@ -105,6 +105,10 @@ enum processID : uint8_t {
 #if ENABLED(DWIN_DIAG_LOG)
   DiagLogView,
 #endif
+#if ENABLED(DWIN_TOWER_GEN)
+  TowerMenu,
+  TowerValue,
+#endif
   Tune,
   #if HAS_PREHEAT
     PLAPreheat,

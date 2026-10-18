@@ -1170,6 +1170,9 @@ void GcodeSuite::process_parsed_command(bool no_ok/*=false*/) {
 
       // #if ENABLED(USE_AUTOZ_TOOL_2)
         case 8015: M8015(); break; // M8015: One key to obtain the Z offset value
+        #if ENABLED(DWIN_TOWER_GEN)
+          case 8025: M8025(); break; // M8025: Temperature tower generator
+        #endif
       // #endif
 
       default: parser.unknown_command_warning(); break;

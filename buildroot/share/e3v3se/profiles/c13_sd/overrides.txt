@@ -182,6 +182,7 @@ Configuration_adv.h E EVENT_GCODE_SD_ABORT "G28XY\nG1 X0 Y215\nM84"
 Configuration_adv.h E POWER_LOSS_RECOVERY
 Configuration_adv.h E PLR_ENABLED_DEFAULT true
 Configuration_adv.h E POWER_LOSS_ZRAISE 5
+Configuration_adv.h E SDCARD_SORT_ALPHA
 Configuration_adv.h E LONG_FILENAME_HOST_SUPPORT
 Configuration_adv.h E LONG_FILENAME_WRITE_SUPPORT
 Configuration_adv.h E SCROLL_LONG_FILENAMES
