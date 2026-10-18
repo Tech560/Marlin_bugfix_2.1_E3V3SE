@@ -9762,11 +9762,10 @@ void Draw_Steps_Menu()
           // Perform skew correction calculation
           if(xyskew_d_ac != 0.0 && xyskew_d_bd != 0.0 && xyskew_s_ad != 0.0)
           {
-            skew_factor = _SKEW_FACTOR(xyskew_d_ac, xyskew_d_bd, xyskew_s_ad);
-            
+            const float new_skew = _SKEW_FACTOR(xyskew_d_ac, xyskew_d_bd, xyskew_s_ad);
+
             //skew factor must be between SKEW_FACTOR_MIN & SKEW_FACTOR_MAX to be valid
-            if(skew_factor < SKEW_FACTOR_MIN || skew_factor > SKEW_FACTOR_MAX){
-              skew_factor = 0.0;
+            if(new_skew < SKEW_FACTOR_MIN || new_skew > SKEW_FACTOR_MAX){
               DWIN_Draw_Rectangle(1, All_Black, 0, 200, 240, 237);
               const char *str = "Invalid Skew Factor:";
               DWIN_Draw_String(true, true, font8x16, Color_Yellow, Color_Bg_Black, (DWIN_WIDTH - strlen(str) * MENU_CHR_W) / 2, 210, F(str));   // Centered Received String
@@ -9774,7 +9773,7 @@ void Draw_Steps_Menu()
 
             }else{
 
-              planner.skew_factor.xy = skew_factor;
+              planner.skew_factor.xy = new_skew;
               settings.save();
 
               DWIN_Draw_Rectangle(1, All_Black, 0, 200, 240, 237);

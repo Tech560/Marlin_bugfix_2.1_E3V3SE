@@ -1915,10 +1915,10 @@
    * an option on the LCD screen to continue the print from the last-known
    * point in the file.
    */
-  //#define POWER_LOSS_RECOVERY // Optional: consumes flash/RAM; enable with DWIN_PLR_MENU for the LCD submenu.
+  #define POWER_LOSS_RECOVERY // Optional: consumes flash/RAM; enable with DWIN_PLR_MENU for the LCD submenu.
   #if ENABLED(POWER_LOSS_RECOVERY)
     // LCD-editable recovery options. Save from the submenu or with M500.
-    //#define DWIN_PLR_MENU
+    #define DWIN_PLR_MENU
     //#define PLR_HEAT_NOZZLE_ON_REBOOT // Default for the LCD nozzle-on-reboot setting
     #define PLR_ENABLED_DEFAULT       true // Power-Loss Recovery enabled by default. (Set with 'M413 Sn' & M500)
     //#define PLR_HEAT_BED_ON_REBOOT        // Heat up bed immediately on reboot to mitigate object detaching/warping.

@@ -119,6 +119,7 @@ Configuration.h E ABL_BILINEAR_SUBDIVISION
 Configuration.h E BILINEAR_SUBDIVISIONS 4
 Configuration.h E Z_SAFE_HOMING
 Configuration.h E HOMING_FEEDRATE_MM_M { (50*60), (50*60), (12*60) }
+Configuration.h E SKEW_CORRECTION
 Configuration.h E XY_DIAG_AC 282.84
 Configuration.h E XY_DIAG_BD 282.84
 Configuration.h E XY_SIDE_AD 200.69
@@ -178,6 +179,7 @@ Configuration_adv.h E SD_FINISHED_RELEASECOMMAND "G1 X0 Y215\nM84"
 Configuration_adv.h E NO_SD_AUTOSTART
 Configuration_adv.h E ONE_CLICK_PRINT
 Configuration_adv.h E EVENT_GCODE_SD_ABORT "G28XY\nG1 X0 Y215\nM84"
+Configuration_adv.h E POWER_LOSS_RECOVERY
 Configuration_adv.h E PLR_ENABLED_DEFAULT true
 Configuration_adv.h E POWER_LOSS_ZRAISE 5
 Configuration_adv.h E LONG_FILENAME_HOST_SUPPORT
