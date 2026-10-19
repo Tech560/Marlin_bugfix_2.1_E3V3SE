@@ -20,7 +20,7 @@ on:
       d_routine_auto_offset:
         description: "D_ROUTINE_AUTO_OFFSET (Z offset, Delta pattern)"
         type: boolean
-        default: true
+        default: false
       dwin_custom_extrude:
         description: "DWIN_CUSTOM_EXTRUDE (custom extrude menu)"
         type: boolean
@@ -32,7 +32,7 @@ on:
       dwin_input_shaping_menu:
         description: "DWIN_INPUT_SHAPING_MENU (requires FT_MOTION)"
         type: boolean
-        default: false
+        default: true
       dwin_render_thumbnail:
         description: "DWIN_RENDER_THUMBNAIL (render G-code thumbnail on the LCD)"
         type: boolean
@@ -40,7 +40,7 @@ on:
       dwin_skew_menu:
         description: "DWIN_SKEW_MENU (requires SKEW_CORRECTION)"
         type: boolean
-        default: false
+        default: true
       dwin_zhome_menu:
         description: "DWIN_ZHOME_MENU (Z height after homing menu)"
         type: boolean
@@ -68,7 +68,7 @@ on:
       power_loss_recovery:
         description: "POWER_LOSS_RECOVERY + DWIN_PLR_MENU (SD recovery and advanced LCD menu; uses memory)"
         type: boolean
-        default: false
+        default: true
       preheat_alert:
         description: "PREHEAT_ALERT (beep when LCD preheating is complete)"
         type: boolean
@@ -76,11 +76,11 @@ on:
       skew_correction:
         description: "SKEW_CORRECTION"
         type: boolean
-        default: false
+        default: true
       x_routine_auto_offset:
         description: "X_ROUTINE_AUTO_OFFSET (Z offset, X pattern)"
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
