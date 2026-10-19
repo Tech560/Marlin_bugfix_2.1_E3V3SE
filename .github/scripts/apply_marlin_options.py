@@ -28,12 +28,12 @@ def to_bool(v: str) -> bool:
 def set_define(macro: str, enabled: bool) -> bool:
     pattern = re.compile(r"^(\s*)(//\s*)?#define\s+" + re.escape(macro) + r"(\b.*)$", re.MULTILINE)
     for path in FILES:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if not pattern.search(text):
             continue
         prefix = "" if enabled else "//"
         text = pattern.sub(lambda m: f"{m.group(1)}{prefix}#define {macro}{m.group(3)}", text, count=1)
-        path.write_text(text)
+        path.write_text(text, encoding="utf-8")
         return True
     return False
 
