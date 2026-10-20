@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Exercise production PLR entry points and DWIN handlers with simulated hardware."""
+import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+CXX = shlex.split(os.environ.get('E3V3SE_TEST_CXX', 'g++'))
 DWIN = (ROOT / 'Marlin/src/lcd/dwin/creality/dwin.cpp').read_text()
 PLR = (ROOT / 'Marlin/src/feature/powerloss.cpp').read_text()
 M1000 = (ROOT / 'Marlin/src/gcode/feature/powerloss/M1000.cpp').read_text()
@@ -240,7 +243,7 @@ def main():
         cpp.write_text(resources+STUBS+controls+helpers+drawing+control_handler+core+command+TESTS)
         # Exercise both an omitted extra-temperature option and an explicit value.
         for extra in (None,5):
-            subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror',
+            subprocess.run([*CXX,'-std=c++17','-Wall','-Wextra','-Werror',
                             *([] if extra is None else [f'-DPLR_HEAT_BED_EXTRA={extra}']),
                             str(cpp),'-o',str(binary)],check=True)
             subprocess.run([str(binary)],check=True)
@@ -263,7 +266,7 @@ int main(){
  }
 }
 ''')
-        subprocess.run(['g++','-std=c++17','-DPOWER_LOSS_ZRAISE=5',str(cpp),'-o',str(binary)],check=True)
+        subprocess.run([*CXX,'-std=c++17','-DPOWER_LOSS_ZRAISE=5',str(cpp),'-o',str(binary)],check=True)
         subprocess.run([str(binary)],check=True)
         print('PASS configured Z clearance without UPS and Z maximum limit')
 

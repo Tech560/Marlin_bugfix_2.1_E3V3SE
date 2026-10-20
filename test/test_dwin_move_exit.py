@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Replay the production DWIN manual-move handlers with a busy motion planner."""
+import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+CXX = shlex.split(os.environ.get('E3V3SE_TEST_CXX', 'g++'))
 SOURCE = ROOT / "Marlin/src/lcd/dwin/creality/dwin.cpp"
 
 STUBS = r'''
@@ -160,7 +163,7 @@ def main():
         cpp, binary = Path(folder)/"test.cpp", Path(folder)/"test"
         cpp.write_text(stubs + functions + TESTS)
         for cold_protection in (False, True):
-            subprocess.run(["g++", "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
+            subprocess.run([*CXX, "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
                             *(["-DPREVENT_COLD_EXTRUSION=1"] if cold_protection else []),
                             str(cpp), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Replay the cube's spiral hop with production arc, PLR and leveling code."""
+import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import test_plr_leveling as leveling
 
 ROOT = leveling.ROOT
+CXX = shlex.split(os.environ.get('E3V3SE_TEST_CXX', 'g++'))
 replace_once = leveling.replace_once
 
 
@@ -134,7 +137,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='plr-arc-') as folder:
         cpp,binary=Path(folder)/'test.cpp',Path(folder)/'test'
         cpp.write_text(harness()+functions+TESTS)
-        subprocess.run(['g++','-std=c++17','-O1','-Wall','-Wextra','-Werror',
+        subprocess.run([*CXX,'-std=c++17','-O1','-Wall','-Wextra','-Werror',
                         '-DTEST_HOME_OFFSET=0','-DTEST_WORKSPACE_OFFSET=0',
                         '-DTEST_LEVELING_AFTER_G28=1',str(cpp),'-o',str(binary)],check=True)
         subprocess.run([str(binary)],check=True)

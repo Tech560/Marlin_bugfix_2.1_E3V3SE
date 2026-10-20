@@ -4,12 +4,15 @@
 The G-code adapter models G92.9 as a counter rebase, not a physical move.
 Leveling transforms and enable/disable position handling come from Marlin.
 """
+import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import test_plr_checkpoint as checkpoint
 
 ROOT = checkpoint.ROOT
+CXX = shlex.split(os.environ.get('E3V3SE_TEST_CXX', 'g++'))
 
 
 def replace_once(text, old, new):
@@ -172,7 +175,7 @@ def main():
         source, binary = Path(folder)/'test.cpp', Path(folder)/'test'
         source.write_text(harness()+transforms+resume+TESTS)
         for after_home, offsets in ((0,0),(1,0),(0,1),(1,1)):
-            subprocess.run(['g++','-std=c++17','-O1','-Wall','-Wextra','-Werror',
+            subprocess.run([*CXX,'-std=c++17','-O1','-Wall','-Wextra','-Werror',
                             f'-DTEST_HOME_OFFSET={offsets}',f'-DTEST_WORKSPACE_OFFSET={offsets}',
                             f'-DTEST_LEVELING_AFTER_G28={after_home}',
                             str(source),'-o',str(binary)],check=True)

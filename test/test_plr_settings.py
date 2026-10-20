@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Run the actual PLR submenu, settings storage, and recovery heating code."""
+import os
 import re
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
 import test_dwin_powerloss as base
 
 ROOT = base.ROOT
+CXX = shlex.split(os.environ.get('E3V3SE_TEST_CXX', 'g++'))
 SETTINGS = (ROOT/'Marlin/src/e3v3se/PLRSettings.cpp').read_text()
 HEADER = (ROOT/'Marlin/src/e3v3se/PLRSettings.h').read_text()
 
@@ -146,7 +149,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='plr-settings-') as folder:
         source,binary=Path(folder)/'test.cpp',Path(folder)/'test'
         source.write_text(cpp)
-        subprocess.run(['g++','-std=c++17','-Wall','-Wextra','-Werror',str(source),'-o',str(binary)],check=True)
+        subprocess.run([*CXX,'-std=c++17','-Wall','-Wextra','-Werror',str(source),'-o',str(binary)],check=True)
         subprocess.run([str(binary)],check=True)
 
 

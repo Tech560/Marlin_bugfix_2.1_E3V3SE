@@ -18,14 +18,14 @@ def main():
     workflow = yaml.load((ROOT/'.github/workflows/build-marlin.yml').read_text(), Loader=yaml.BaseLoader)
     inputs = workflow['on']['workflow_dispatch']['inputs']
     assert inputs['power_loss_recovery']['type'] == 'boolean'
-    assert inputs['power_loss_recovery']['default'] == 'false'
+    assert inputs['power_loss_recovery']['default'] == 'true'
     assert 'dwin_plr_menu' not in inputs
     apply_step = next(s['run'] for s in workflow['jobs']['build']['steps'] if s.get('name') == 'Apply firmware options')
     pairs = re.findall(r'(POWER_LOSS_RECOVERY|DWIN_PLR_MENU)=\$\{\{\s*inputs\.([a-z_]+)\s*\}\}', apply_step)
     assert dict(pairs) == {'POWER_LOSS_RECOVERY':'power_loss_recovery', 'DWIN_PLR_MENU':'power_loss_recovery'}
-    committed = (ROOT/'Marlin/Configuration_adv.h').read_text()
-    assert not enabled(committed, 'POWER_LOSS_RECOVERY')
-    assert not enabled(committed, 'DWIN_PLR_MENU')
+    committed = (ROOT/'Marlin/Configuration_adv.h').read_text(encoding='utf-8')
+    assert enabled(committed, 'POWER_LOSS_RECOVERY')
+    assert enabled(committed, 'DWIN_PLR_MENU')
     with tempfile.TemporaryDirectory(prefix='plr-build-option-') as folder:
         root = Path(folder)
         (root/'Marlin').mkdir()
@@ -42,7 +42,7 @@ def main():
         # The configuration helper must refuse the menu without base recovery.
         result = apply('POWER_LOSS_RECOVERY=false','DWIN_PLR_MENU=true')
         assert not enabled(result,'POWER_LOSS_RECOVERY') and not enabled(result,'DWIN_PLR_MENU')
-    print('PASS single workflow PLR switch: default off, recovery + menu on/off together, dependency enforced')
+    print('PASS single workflow PLR switch: default on, recovery + menu on/off together, dependency enforced')
 
 
 if __name__ == '__main__':

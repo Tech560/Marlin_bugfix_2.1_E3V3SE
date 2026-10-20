@@ -5,15 +5,18 @@ Run: python3 test/test_bed_level_visualizer.py
 Optional LCD command previews: --preview-dir /tmp/bed-level-preview
 Only the LCD transport and bed mesh are replaced; geometry and rendering are production code.
 """
+import os
 import argparse
 from pathlib import Path
 import re
 import shutil
+import shlex
 import subprocess
 import tempfile
 from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parents[1]
+CXX = shlex.split(os.environ.get('E3V3SE_TEST_CXX', 'g++'))
 LCD = ROOT / "Marlin/src/lcd/dwin/creality"
 
 STUBS = r'''
@@ -526,7 +529,7 @@ def main():
         menu += menu_function('void HMI_Level_Menu(', '\n}\n')
         cpp.write_text(STUBS + level_defines + implementation + menu + handler + TESTS)
         for nx, ny, delay in ((6, 6, 10), (2, 2, 10), (3, 9, 10), (9, 3, 10), (11, 11, 10), (6, 6, 20)):
-            subprocess.run(["g++", "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
+            subprocess.run([*CXX, "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
                             *(["-fsanitize=undefined"] if args.sanitize else []),
                             f"-DGRID_MAX_POINTS_X={nx}", f"-DGRID_MAX_POINTS_Y={ny}",
                             f"-DBED_LEVEL_VISUALIZER_DRAW_DELAY_MS={delay}", "-I", str(LCD),
@@ -548,7 +551,7 @@ int main() {
 }
 '''
         cpp.write_text(STUBS + level_defines + menu + disabled)
-        subprocess.run(["g++", "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
+        subprocess.run([*CXX, "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
                         "-DBED_LEVEL_VISUALIZER=0", "-DGRID_MAX_POINTS_X=6", "-DGRID_MAX_POINTS_Y=6",
                         "-I", str(LCD), str(cpp), "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)

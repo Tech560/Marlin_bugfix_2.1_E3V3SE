@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Replay the production PLR checkpoint/resume code with moving planner state."""
+import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import test_dwin_powerloss as common
 
 ROOT = common.ROOT
+CXX = shlex.split(os.environ.get('E3V3SE_TEST_CXX', 'g++'))
 SOURCE = (ROOT/'Marlin/src/feature/powerloss.cpp').read_text()
 
 STUBS = r'''
@@ -341,7 +344,7 @@ def main():
         source,binary=Path(folder)/'test.cpp',Path(folder)/'test'
         source.write_text(STUBS+functions+TESTS)
         for home, workspace in ((0,0),(1,0),(0,1),(1,1)):
-            subprocess.run(['g++','-std=c++17','-O1','-Wall','-Wextra','-Werror',
+            subprocess.run([*CXX,'-std=c++17','-O1','-Wall','-Wextra','-Werror',
                             f'-DTEST_HOME_OFFSET={home}', f'-DTEST_WORKSPACE_OFFSET={workspace}',
                             str(source),'-o',str(binary)],check=True)
             subprocess.run([str(binary)],check=True)
