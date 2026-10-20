@@ -4021,6 +4021,10 @@ static_assert(_PLUS_TEST(3), "DEFAULT_MAX_ACCELERATION values must be positive."
   #endif
 #endif
 
+#if ENABLED(DWIN_SKEW_MENU) && DISABLED(SKEW_CORRECTION)
+  #error "DWIN_SKEW_MENU requires SKEW_CORRECTION."
+#endif
+
 #if ALL(X_AXIS_TWIST_COMPENSATION, NOZZLE_AS_PROBE)
   #error "X_AXIS_TWIST_COMPENSATION is incompatible with NOZZLE_AS_PROBE."
 #endif
