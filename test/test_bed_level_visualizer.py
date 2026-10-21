@@ -210,6 +210,10 @@ void check_surface_coverage() {
 void check_qr_pixels() {
  constexpr int size=BedLevelHelpQR::EXTENT, left=DWIN_WIDTH-size-12, top=30;
  int pixels[size][size]={};
+ // Header hints must stop before the QR. The panel can render the 6x12 font
+ // eight pixels wide, so measure every glyph as eight pixels.
+ for(const auto &op:ops) if(op.kind=='T' && op.x0<left && op.y0<top+size && op.y0+16>top)
+  assert(op.x0+int(op.text.size())*std::max(op.x1,8)<=left && "header text runs under the QR code");
  for(const auto &op:ops) if(op.kind=='R')
   for(int x=std::max(left,op.x0);x<=std::min(left+size-1,op.x1);++x)
    for(int y=std::max(top,op.y0);y<=std::min(top+size-1,op.y1);++y)
@@ -377,13 +381,14 @@ int main(int argc,char **argv) {
  // Empty, incomplete, non-finite, and large values stay within the panel bounds.
  shape(0); bedlevel.valid=false; BedLevelVisualizer::start(); complete();
  assert(has_text("No bed mesh") && has_text("Score: INCOMPLETE") && has_text("Help QR"));
+ check_qr_pixels(); // The hint must stop before the QR, even without a mesh.
  if(!preview.empty()) dump(preview+"empty.draw");
  shape(1); bedlevel.z_values[0][0]=NAN; BedLevelVisualizer::start(); complete();
  bool gray=false;
  for(const auto &op:ops) if(op.kind=='R' && op.y0>=128 && op.y1<=246 && op.color==MISSING_COLOR) gray=true;
  assert(gray && has_text("Score: INCOMPLETE")); if(!preview.empty()) dump(preview+"missing.draw");
  shape(0); for(auto &column:bedlevel.z_values) for(auto &z:column) z=INFINITY;
- BedLevelVisualizer::start(); complete(); assert(has_text("No measured points"));
+ BedLevelVisualizer::start(); complete(); assert(has_text("No measured data")); check_qr_pixels();
  for(float value : {0.000001f,3.0f,1000.0f,-1000.0f}) {
   shape(0); for(auto &column:bedlevel.z_values) for(auto &z:column) z=value;
   BedLevelVisualizer::start(); complete();

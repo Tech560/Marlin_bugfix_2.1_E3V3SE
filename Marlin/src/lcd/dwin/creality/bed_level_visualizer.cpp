@@ -176,7 +176,9 @@ namespace BedLevelVisualizer {
             case 3: label(12, DWIN_HEIGHT - 14, F("Click: Back | Z auto-scaled")); return true;
             case 4:
               if (!has_mesh) {
-                label(12, 44, initialized ? F("No measured points.") : F("No bed mesh available."));
+                // Keep this line short enough to stop before the help QR, even
+                // when the panel renders the 6x12 font eight pixels wide.
+                label(12, 44, initialized ? F("No measured data") : F("No bed mesh."));
                 return true;
               }
               format_mm(value, sizeof(value), stats.minimum, 3, true);
@@ -184,7 +186,7 @@ namespace BedLevelVisualizer {
               DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 12, 30, text);
               return true;
             case 5:
-              if (!has_mesh) { label(12, 64, F("Run bed leveling.")); return true; }
+              if (!has_mesh) { label(12, 64, F("Run bed leveling")); return true; }
               format_mm(value, sizeof(value), stats.maximum, 3, true);
               snprintf(text, sizeof(text), "Max:%s mm", value);
               DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 12, 48, text);
