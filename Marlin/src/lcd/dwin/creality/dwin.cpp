@@ -7806,13 +7806,11 @@ void HMI_Prepare()
         // Scroll up and draw a blank bottom line
         Scroll_Menu(DWIN_SCROLL_UP);
 #if ENABLED(DWIN_CREALITY_320_LCD)
-        DWIN_Draw_Rectangle(1, All_Black, 50, 206, DWIN_WIDTH, 236);
+        // Start at the label column: a wider start left the first glyph behind
+        DWIN_Draw_Rectangle(1, All_Black, LBLX, 206, DWIN_WIDTH - 1, 236);
 #endif
-        // Show new icons
-        Draw_Menu_Icon(MROWS, ICON_Axis + select_prepare.now - 1);
-        // Draw "More" icon for sub-menus Show new more symbol to new line
-        if (index_prepare < 7)
-          Draw_More_Icon(MROWS - index_prepare + 1);
+        // Each item below draws its own icon, label and More arrow; a generic
+        // icon here used to leave an unrelated icon on rows without one.
         if (index_prepare == PREPARE_CASE_OUTSTORK)
         {
           Item_Prepare_outstork(MROWS);
@@ -7849,6 +7847,10 @@ void HMI_Prepare()
         if (index_prepare == PREPARE_CASE_ZHEIGHT)
           Item_Prepare_Homeheight(MROWS);
 #endif
+#if ENABLED(DWIN_TOWER_GEN)
+        if (index_prepare == PREPARE_CASE_TOWER)
+          Item_Prepare_Tower(MROWS);
+#endif
       }
       else
       {
@@ -7865,34 +7867,56 @@ void HMI_Prepare()
         index_prepare--;
         Scroll_Menu(DWIN_SCROLL_DOWN);
         DWIN_Draw_Rectangle(1, Color_Bg_Black, 180, MBASE(0) - 8, 238, MBASE(0 + 1) - 12); //
+        // index_prepare is the row that now sits on the top line, so name the
+        // items instead of repeating how many features happen to precede them.
         if (index_prepare == MROWS)
           Draw_Back_First();
-        // else
-        // Draw_Menu_Line(0, ICON_Axis + select_prepare.now -1);
-
-        // if (index_prepare < 6) Draw_More_Icon(MROWS -index_prepare + 1);
-        else if (index_prepare == 6)
+        else if (index_prepare == PREPARE_CASE_MOVE)
           Item_Prepare_Move(0);
-        else if (index_prepare == 7)
+        else if (index_prepare == PREPARE_CASE_DISA)
           Item_Prepare_Disable(0);
-        else if (index_prepare == 8)
+        else if (index_prepare == PREPARE_CASE_HOME)
           Item_Prepare_Home(0);
-        else if (index_prepare == 9)
+#if HAS_ZOFFSET_ITEM
+        else if (index_prepare == PREPARE_CASE_ZOFF)
           Item_Prepare_Offset(0);
-        else if (index_prepare == 10)
+#endif
+        else if (index_prepare == PREPARE_CASE_INSTORK)
           Item_Prepare_instork(0);
-        else if (index_prepare == 11)
+        else if (index_prepare == PREPARE_CASE_OUTSTORK)
           Item_Prepare_outstork(0);
-        else if (index_prepare == 12)
+#if HAS_HOTEND
+        else if (index_prepare == PREPARE_CASE_PLA)
           Item_Prepare_PLA(0);
-        else if (index_prepare == 13)
+        else if (index_prepare == PREPARE_CASE_TPU)
           Item_Prepare_TPU(0);
-#if ENABLED(EXTRA_PREHEAT_LABELS)          
-        else if (index_prepare == 14)
+#if ENABLED(EXTRA_PREHEAT_LABELS)
+        else if (index_prepare == PREPARE_CASE_PETG)
           Item_Prepare_PETG(0);
-        else if (index_prepare == 15)
+        else if (index_prepare == PREPARE_CASE_ABS)
           Item_Prepare_ABS(0);
-#endif          
+#endif
+#endif
+#if HAS_PREHEAT
+        else if (index_prepare == PREPARE_CASE_COOL)
+          Item_Prepare_Cool(0);
+#endif
+        else if (index_prepare == PREPARE_CASE_LANG)
+          Item_Prepare_Lang(0);
+        else if (index_prepare == PREPARE_CASE_DISPLAY)
+          Item_Prepare_Display(0);
+#if ENABLED(DWIN_CUSTOM_EXTRUDE)
+        else if (index_prepare == PREPARE_CASE_CUSTOM_EXTRUDE)
+          Item_Prepare_CExtrude(0);
+#endif
+#if ENABLED(DWIN_ZHOME_MENU)
+        else if (index_prepare == PREPARE_CASE_ZHEIGHT)
+          Item_Prepare_Homeheight(0);
+#endif
+#if ENABLED(DWIN_TOWER_GEN)
+        else if (index_prepare == PREPARE_CASE_TOWER)
+          Item_Prepare_Tower(0);
+#endif
       }
       else
       {
@@ -10386,6 +10410,10 @@ void Draw_MeshHistory_Menu() {
   DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
                    (DWIN_WIDTH - strlen("Mesh Data") * MENU_CHR_W) / 2, 4, F("Mesh Data"));
 
+  // Wipe the body with panel-valid coordinates (x2 = DWIN_WIDTH is outside the
+  // panel) so a second visit cannot show the previous text through this one.
+  DWIN_Draw_Rectangle(1, Color_Bg_Black, 0, 63, DWIN_WIDTH - 1, 254);
+
   char text[48];
   const uint8_t snapshots = meshHistory::stored();
   if (snapshots)
@@ -10393,25 +10421,32 @@ void Draw_MeshHistory_Menu() {
                snapshots, (unsigned long)meshHistory::last_prints());
   else
     strcpy_P(text, PSTR("No snapshots on SD"));
-  DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 40, text);
+  DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 68, text);
 
   int8_t delta[MESH_HISTORY_POINTS];
   if (meshHistory::last_deltas(delta)) {
-    // One line per mesh row, each value in micrometres.
-    for (uint8_t row = 0; row < GRID_MAX_POINTS_Y; ++row) {
+    DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 92, F("Drift per point, um"));
+    // One line per mesh row, each value in micrometres; six lines fit here.
+    const uint8_t rows = _MIN(uint8_t(GRID_MAX_POINTS_Y), uint8_t(6));
+    for (uint8_t row = 0; row < rows; ++row) {
       mesh_format_row(&delta[row * GRID_MAX_POINTS_X], GRID_MAX_POINTS_X, text, sizeof(text));
-      DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 30, 70 + row * 16, text);
+      DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 16, 114 + row * 14, text);
     }
     int16_t max_um, avg_um;
     if (meshHistory::drift(max_um, avg_um)) {
-      snprintf_P(text, sizeof(text), PSTR("Drift max %ium avg %ium"), max_um, avg_um);
-      DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 180, text);
+      snprintf_P(text, sizeof(text), PSTR("Max %ium  Avg %ium"), max_um, avg_um);
+      DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 202, text);
     }
   }
-  else
-    DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 80, F("Need two snapshots"));
+  else {
+    // One snapshot still needs a second one before there is a drift to show.
+    DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 92,
+                     snapshots ? F("Need two snapshots") : F("Save one first"));
+    DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 116,
+                     snapshots ? F("Save a second one") : F("Leveling > Save Snapshot"));
+  }
 
-  DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 220, F("ENTER = back"));
+  DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, 16, 236, F("ENTER = back"));
 }
 
 void HMI_MeshHistory() {
@@ -10744,7 +10779,8 @@ void HMI_Tune()
         index_tune = select_tune.now;
         Scroll_Menu(DWIN_SCROLL_UP);
 #if ENABLED(DWIN_CREALITY_320_LCD)
-        DWIN_Draw_Rectangle(1, All_Black, 50, 206, DWIN_WIDTH, 236);
+        // Start at the label column: a wider start left the first glyph behind
+        DWIN_Draw_Rectangle(1, All_Black, LBLX, 206, DWIN_WIDTH - 1, 236);
 #endif
         // Show new icons
         Draw_Menu_Icon(MROWS, ICON_Zoffset);
