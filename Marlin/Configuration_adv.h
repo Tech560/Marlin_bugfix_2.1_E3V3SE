@@ -1804,7 +1804,7 @@
 #endif
 
 // Keep the last few bed meshes on the SD card and show the drift between them
-// in Leveling > Mesh History. Needs the Creality DWIN screen and bilinear ABL.
+// in Leveling > Mesh Data. Needs the Creality DWIN screen and bilinear ABL.
 #define DWIN_MESH_HISTORY
 #if ENABLED(DWIN_MESH_HISTORY) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(AUTO_BED_LEVELING_BILINEAR))
   #error "DWIN_MESH_HISTORY requires DWIN_CREALITY_LCD and AUTO_BED_LEVELING_BILINEAR."

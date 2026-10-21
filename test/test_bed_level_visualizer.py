@@ -53,6 +53,9 @@ int firmware_snprintf(char *text,size_t capacity,const char *format,...) {
 #ifndef BED_LEVEL_VISUALIZER
  #define BED_LEVEL_VISUALIZER 1
 #endif
+#ifndef DWIN_MESH_HISTORY
+ #define DWIN_MESH_HISTORY 0
+#endif
 #define _MIN(A,B) ((A)<(B)?(A):(B))
 #define _MAX(A,B) ((A)>(B)?(A):(B))
 #define F(S) S
@@ -62,8 +65,8 @@ millis_t clock_now=0;
 millis_t millis() { return clock_now; }
 using __FlashStringHelper = char;
 constexpr int DWIN_WIDTH=240, DWIN_HEIGHT=320;
-constexpr int Color_White=0xffff, Color_Bg_Black=0, Color_Bg_Blue=0x001f, Color_Yellow=0xfe29;
-constexpr int font6x12=6, font8x16=8;
+[[maybe_unused]] constexpr int Color_White=0xffff, Color_Bg_Black=0, Color_Bg_Blue=0x001f, Color_Yellow=0xfe29;
+[[maybe_unused]] constexpr int font6x12=6, font8x16=8;
 struct { bool valid=true; float z_values[GRID_MAX_POINTS_X][GRID_MAX_POINTS_Y];
          bool mesh_is_valid() { return valid; } } bedlevel;
 struct Op {
@@ -90,8 +93,16 @@ void DWIN_Draw_String(bool,bool,int font,int color,int,int x,int y,const char *t
  draw_times.push_back(clock_now);
 }
 void DWIN_UpdateLCD() {}
-enum { Level, Leveling, BedLevelView, MROWS=5 };
+enum { Level, Leveling, BedLevelView, MeshHistory, MROWS=5 };
 int checkkey=Level, level_redraws=0, highlighted_row=0;
+uint8_t index_level=MROWS;
+// The real Scroll_Menu pans the framebuffer; the model only needs the pan to
+// be free of side effects, so the cursor and rows are asserted directly.
+void Scroll_Menu(int) {}
+#define DWIN_SCROLL_UP 1
+#define DWIN_SCROLL_DOWN 0
+void Draw_MeshHistory_Menu() {}
+namespace meshHistory { inline void save_snapshot() {} }
 bool back_selected=true;
 struct {
  bool Refresh_bottom_flag=false,leveling_offset_flag=false,Pressure_Height_end=false,
@@ -113,6 +124,7 @@ int get_encoder_state() { return event; }
 #define DWIN_CREALITY_480_LCD 0
 #define MBASE(L) (34+36*(L))
 constexpr int LBLX=42,ICON_SetHome=1,ICON_Edit_Level_Data=2,LANGUAGE_EDIT_LEVEL_DATA=3,JPN_OFFSET=-5;
+#define ICON_WriteEEPROM 4 // Only the mesh rows use it.
 void Draw_Menu_Line(uint8_t row,int) { assert(row<=MROWS); }
 void Draw_More_Icon(uint8_t row) { assert(row<=MROWS); }
 void DWIN_Draw_Label(uint16_t y,const char *text) {
@@ -511,13 +523,13 @@ def main():
     implementation = re.sub(r'^#include .*$', '', (LCD / 'bed_level_visualizer.cpp').read_text(), flags=re.M)
     with tempfile.TemporaryDirectory(prefix="bed-level-visualizer-") as tmp:
         cpp, binary = Path(tmp) / "renderer.cpp", Path(tmp) / "renderer"
-        dwin = (LCD / 'dwin.cpp').read_text()
+        dwin = (LCD / 'dwin.cpp').read_text(encoding="utf-8")
         handler_start = dwin.index('  static void HMI_BedLevelVisualizer()')
         handler_end = dwin.index('\n  }', handler_start) + 4
         handler = dwin[handler_start:handler_end]
         control = dwin[dwin.index('void HMI_Control()'):dwin.index('// Change leveling value')]
         assert 'BedLevelView' not in control and 'BedLevelVisualizer' not in control
-        level_defines = '\n'.join(line for line in dwin.splitlines() if line.startswith('#define LEVEL_CASE_')) + '\n'
+        level_defines = '\n'.join(line for line in dwin.splitlines() if line.startswith('#define LEVEL_')) + '\n'
         def menu_function(start, end):
             first = dwin.index(start)
             return dwin[first:dwin.index(end, first) + len(end)]
@@ -525,9 +537,10 @@ def main():
         menu += '#if ENABLED(BED_LEVEL_VISUALIZER)\n'
         menu += menu_function('  static void Item_Level_BedVisualizer(', '\n  }\n')
         menu += '#endif\n'
+        menu += menu_function('static void Draw_Level_Item(', '\n}\n')
         menu += menu_function('void Draw_Level_Menu(', '\n}\n')
         menu += menu_function('void HMI_Level_Menu(', '\n}\n')
-        cpp.write_text(STUBS + level_defines + implementation + menu + handler + TESTS)
+        cpp.write_text(STUBS + level_defines + implementation + menu + handler + TESTS, encoding="utf-8")
         for nx, ny, delay in ((6, 6, 10), (2, 2, 10), (3, 9, 10), (9, 3, 10), (11, 11, 10), (6, 6, 20)):
             subprocess.run([*CXX, "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
                             *(["-fsanitize=undefined"] if args.sanitize else []),
@@ -550,9 +563,40 @@ int main() {
  std::cout<<"PASS Leveling menu with BED_LEVEL_VISUALIZER disabled\n";
 }
 '''
-        cpp.write_text(STUBS + level_defines + menu + disabled)
+        cpp.write_text(STUBS + level_defines + menu + disabled, encoding="utf-8")
         subprocess.run([*CXX, "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
                         "-DBED_LEVEL_VISUALIZER=0", "-DGRID_MAX_POINTS_X=6", "-DGRID_MAX_POINTS_Y=6",
+                        "-I", str(LCD), str(cpp), "-o", str(binary)], check=True)
+        subprocess.run([str(binary)], check=True)
+        # Seven rows do not fit the six lines above the status bar, so the
+        # Leveling list must scroll instead of drawing over the status bar.
+        scrolled = r'''
+bool has_text(const char *needle) {
+ for(const auto &op:ops) if(op.kind=='T' && op.text.find(needle)!=std::string::npos) return true;
+ return false;
+}
+int main() {
+ assert(LEVEL_CASE_TOTAL==6 && LEVEL_CASE_MESH==5 && LEVEL_CASE_MESH_SAVE==6);
+ const int bottom = MBASE(MROWS) + 26; // Last separator the status bar can take.
+ select_cextr.reset(); Draw_Level_Menu();
+ assert(back_selected && has_text("Mesh Data") && !has_text("Save Snapshot"));
+ event=ENCODER_DIFF_CW;
+ for(int n=0;n<6;++n) HMI_Level_Menu();
+ assert(select_cextr.now==LEVEL_CASE_MESH_SAVE && has_text("Save Snapshot"));
+ for(const auto &op:ops) {
+  const int lowest = op.kind=='T' ? op.y0+16 : op.y1;
+  assert(lowest<=bottom && "a Leveling row was drawn into the status bar");
+ }
+ event=ENCODER_DIFF_CCW;
+ for(int n=0;n<6;++n) HMI_Level_Menu();
+ assert(select_cextr.now==0 && back_selected);
+ std::cout<<"PASS Leveling menu scrolls to every row within the menu area\n";
+}
+'''
+        cpp.write_text(STUBS + level_defines + implementation + menu + scrolled, encoding="utf-8")
+        subprocess.run([*CXX, "-std=c++17", "-O1", "-Wall", "-Wextra", "-Werror",
+                        "-DDWIN_MESH_HISTORY=1", "-DGRID_MAX_POINTS_X=6", "-DGRID_MAX_POINTS_Y=6",
+                        "-DBED_LEVEL_VISUALIZER_DRAW_DELAY_MS=10",
                         "-I", str(LCD), str(cpp), "-o", str(binary)], check=True)
         subprocess.run([str(binary)], check=True)
     if args.preview_dir:

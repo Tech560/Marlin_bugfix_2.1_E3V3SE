@@ -238,6 +238,7 @@ select_t select_page{0}, select_file{0}, select_print{0}, select_prepare{0}, sel
 uint8_t index_file = MROWS,
         index_prepare = MROWS,
         index_control = MROWS,
+        index_level = MROWS,
         index_leveling = MROWS,
         index_tune = MROWS,
         index_advset = MROWS,
@@ -1589,6 +1590,11 @@ inline bool Apply_Encoder(const ENCODER_DiffState &encoder_diffState, T &valref)
 #define LEVEL_CASE_MESH      (3 + ENABLED(BED_LEVEL_VISUALIZER) + ENABLED(DWIN_MESH_HISTORY))
 #define LEVEL_CASE_MESH_SAVE (LEVEL_CASE_MESH + ENABLED(DWIN_MESH_HISTORY))
 #define LEVEL_CASE_TOTAL     (3 + ENABLED(BED_LEVEL_VISUALIZER) + 2 * ENABLED(DWIN_MESH_HISTORY))
+
+// The Leveling list can be longer than the six lines above the status bar, so
+// its rows are placed relative to the scroll offset instead of their own index.
+#define LEVEL_SCROL(L) (MROWS - index_level + (L))
+#define LEVEL_VISI(L)  ((LEVEL_SCROL(L)) >= 0 && (LEVEL_SCROL(L)) <= MROWS)
 
 #define TUNE_CASE_SPEED 1
 #define TUNE_CASE_TEMP (TUNE_CASE_SPEED + ENABLED(HAS_HOTEND))
@@ -6076,46 +6082,70 @@ void HMI_Select_language()
   }
 #endif
 
+// Draw one Leveling item on any visible menu line, so the list can scroll
+// without ever drawing outside the six lines above the status bar.
+static void Draw_Level_Item(const uint8_t item, const uint8_t line) {
+  if (!item) { // Back
+    Draw_Back_First(select_cextr.now == 0);
+    return;
+  }
+  switch (item) {
+    case 1: // Start Auto Z-Offset
+      Erase_Menu_Text(line);
+      DWIN_Draw_Label(MBASE(line), F("Start Auto Z-Offset"));
+      Draw_Menu_Line(line, ICON_SetHome);
+      break;
+    case 2: // Start Bed Leveling
+      Erase_Menu_Text(line);
+      DWIN_Draw_Label(MBASE(line), F("Start Bed Leveling"));
+      Draw_Menu_Line(line, ICON_Edit_Level_Data);
+      break;
+    case 3: // Edit Level Data, shown with the localized icon
+      Erase_Menu_Text(line);
+      DWIN_ICON_Show(HMI_flag.language, LANGUAGE_EDIT_LEVEL_DATA, 42, MBASE(line) + JPN_OFFSET);
+      Draw_Menu_Line(line, ICON_Edit_Level_Data);
+      break;
+#if ENABLED(BED_LEVEL_VISUALIZER)
+    case LEVEL_CASE_BEDVIS:
+      Item_Level_BedVisualizer(line);
+      break;
+#endif
+#if ENABLED(DWIN_MESH_HISTORY)
+    case LEVEL_CASE_MESH:
+      Erase_Menu_Text(line);
+      DWIN_Draw_Label(MBASE(line), F("Mesh Data"));
+      Draw_Menu_Line(line, ICON_Edit_Level_Data);
+      Draw_More_Icon(line);
+      break;
+    case LEVEL_CASE_MESH_SAVE:
+      Erase_Menu_Text(line);
+      DWIN_Draw_Label(MBASE(line), F("Save Snapshot"));
+      Draw_Menu_Line(line, ICON_WriteEEPROM);
+      break;
+#endif
+    default:
+      break;
+  }
+}
+
 void Draw_Level_Menu(){
   Clear_Main_Window();
   Draw_Mid_Status_Area(true);
   HMI_flag.Refresh_bottom_flag = false; // Flag refresh bottom parameter
 
+  // Scroll just far enough for the selected row to be on screen
+  index_level = select_cextr.now > MROWS ? select_cextr.now : uint8_t(MROWS);
+
   // Back option
-  Draw_Back_First(select_cextr.now == 0);
+  if (LEVEL_VISI(0)) Draw_Level_Item(0, LEVEL_SCROL(0));
   // Title
   Draw_Title(F("Leveling Menu"));
-  
-  // There's no graphical asset for this label, so we just write it as string
-  DWIN_Draw_Label(MBASE(1), F("Start Auto Z-Offset"));
-  // Menu Line with Extrusion Icon
-  Draw_Menu_Line(1, ICON_SetHome);
-  
 
-  // There's no graphical asset for this label, so we just write it as string
-  DWIN_Draw_Label(MBASE(2), F("Start Bed Leveling"));
-  // Menu Line with Extrusion Icon
-  Draw_Menu_Line(2, ICON_Edit_Level_Data); 
+  for (uint8_t item = 1; item <= LEVEL_CASE_TOTAL; ++item)
+    if (LEVEL_VISI(item)) Draw_Level_Item(item, LEVEL_SCROL(item));
 
-  // Show Edit Level Data Icon
-  DWIN_ICON_Show(HMI_flag.language, LANGUAGE_EDIT_LEVEL_DATA, 42, MBASE(3) + JPN_OFFSET);
-  // Draw Menu Line for Edit Level Data Icon
-  Draw_Menu_Line(3, ICON_Edit_Level_Data);
-#if ENABLED(BED_LEVEL_VISUALIZER)
-  Item_Level_BedVisualizer(LEVEL_CASE_BEDVIS);
-#endif
-#if ENABLED(DWIN_MESH_HISTORY)
-  Erase_Menu_Text(LEVEL_CASE_MESH);
-  DWIN_Draw_Label(MBASE(LEVEL_CASE_MESH), F("Mesh History"));
-  Draw_Menu_Line(LEVEL_CASE_MESH, ICON_Edit_Level_Data);
-  Draw_More_Icon(LEVEL_CASE_MESH);
-
-  Erase_Menu_Text(LEVEL_CASE_MESH_SAVE);
-  DWIN_Draw_Label(MBASE(LEVEL_CASE_MESH_SAVE), F("Save Mesh Snapshot"));
-  Draw_Menu_Line(LEVEL_CASE_MESH_SAVE, ICON_WriteEEPROM);
-#endif
   if (select_cextr.now)
-    Draw_Menu_Cursor(select_cextr.now);
+    Draw_Menu_Cursor(LEVEL_SCROL(select_cextr.now));
 }
 
 #if ENABLED(DWIN_MESH_HISTORY)
@@ -6134,12 +6164,32 @@ void HMI_Level_Menu(){
   if (encoder_diffState == ENCODER_DIFF_CW)
   {
     if (select_cextr.inc(1 + LEVEL_CASE_TOTAL))
-      Move_Highlight(1, select_cextr.now);
+    {
+      if (select_cextr.now > MROWS && select_cextr.now > index_level)
+      {
+        // Scroll the list up and draw the row that reaches the bottom line
+        index_level = select_cextr.now;
+        Scroll_Menu(DWIN_SCROLL_UP);
+        Draw_Level_Item(index_level, MROWS);
+      }
+      else
+        Move_Highlight(1, LEVEL_SCROL(select_cextr.now));
+    }
   }
   else if (encoder_diffState == ENCODER_DIFF_CCW)
   {
     if (select_cextr.dec())
-      Move_Highlight(-1, select_cextr.now);
+    {
+      if (select_cextr.now < index_level - MROWS)
+      {
+        // Scroll the list down and draw the row that reaches the top line
+        index_level--;
+        Scroll_Menu(DWIN_SCROLL_DOWN);
+        Draw_Level_Item(index_level - MROWS, 0);
+      }
+      else
+        Move_Highlight(-1, LEVEL_SCROL(select_cextr.now));
+    }
   }
   else if (encoder_diffState == ENCODER_DIFF_ENTER)
   {
@@ -10334,7 +10384,7 @@ void Draw_MeshHistory_Menu() {
   Draw_Back_First();
 
   DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
-                   (DWIN_WIDTH - strlen("Mesh History") * MENU_CHR_W) / 2, 4, F("Mesh History"));
+                   (DWIN_WIDTH - strlen("Mesh Data") * MENU_CHR_W) / 2, 4, F("Mesh Data"));
 
   char text[48];
   const uint8_t snapshots = meshHistory::stored();
