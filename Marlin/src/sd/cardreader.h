@@ -291,8 +291,15 @@ public:
       //FORCE_INLINE static void setSortReverse(bool b) { sort_reverse = b; }
     #endif
   #else
+    #define SD_DATE_ORDER_MAX 100
+    // The DWIN file browser lists the newest file first, since the order the
+    // card returns its entries in means nothing to the user. sortByDate()
+    // builds that order for the working directory.
+    static void sortByDate();
     FORCE_INLINE static void selectFileByIndexSorted(const int16_t nr) {
-      selectFileByIndex(TERN(SDCARD_RATHERRECENTFIRST, get_num_items() - 1 - nr, (nr)));
+      selectFileByIndex((date_order_count > 0 && nr < date_order_count)
+                        ? date_order[nr]
+                        : TERN(SDCARD_RATHERRECENTFIRST, get_num_items() - 1 - nr, (nr)));
     }
   #endif
 
@@ -349,6 +356,13 @@ private:
   static MediaFile root, workDir, workDirParents[MAX_DIR_DEPTH];
   static uint8_t workDirDepth;
   static int16_t nrItems; // Cache the total count
+
+  // Newest-first order of the working directory, for the file browser
+  #if DISABLED(SDCARD_SORT_ALPHA)
+    static uint8_t  date_order[SD_DATE_ORDER_MAX]; // Positions in the card's own order
+    static uint32_t date_stamp[SD_DATE_ORDER_MAX]; // Their modification stamps
+    static int16_t  date_order_count;              // -1 when the folder is too large
+  #endif
 
   //
   // Alphabetical file and folder sorting

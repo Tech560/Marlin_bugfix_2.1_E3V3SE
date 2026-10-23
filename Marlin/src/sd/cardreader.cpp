@@ -1666,6 +1666,44 @@ void CardReader::cdroot() {
 
 #endif // SDCARD_SORT_ALPHA
 
+#if DISABLED(SDCARD_SORT_ALPHA)
+
+  uint8_t  CardReader::date_order[SD_DATE_ORDER_MAX];
+  uint32_t CardReader::date_stamp[SD_DATE_ORDER_MAX];
+  int16_t  CardReader::date_order_count = -1;
+
+  /**
+   * Index the working directory by modification date, newest first.
+   *
+   * The browser shows this order, so the file that was just written to the
+   * card is at the top instead of wherever the FAT happens to keep it. The
+   * order covers at most SD_DATE_ORDER_MAX entries; a larger folder keeps the
+   * card's own order rather than showing a half-sorted list.
+   */
+  void CardReader::sortByDate() {
+    date_order_count = 0;
+    int16_t count = 0;
+    workDir.rewind();
+    for (dir_t p; workDir.readDir(&p, longFilename) > 0;) {
+      if (!is_visible_entity(p)) continue;
+      if (count == SD_DATE_ORDER_MAX) { date_order_count = -1; return; }
+
+      const uint32_t stamp = uint32_t(p.lastWriteDate) << 16 | p.lastWriteTime;
+      int16_t i = count++;
+      while (i > 0 && date_stamp[i - 1] < stamp) {
+        date_stamp[i] = date_stamp[i - 1];
+        date_order[i] = date_order[i - 1];
+        --i;
+      }
+      date_stamp[i] = stamp;
+      date_order[i] = uint8_t(count - 1);   // same count as selectByIndex uses
+      hal.watchdog_refresh();
+    }
+    date_order_count = count;
+  }
+
+#endif // !SDCARD_SORT_ALPHA
+
 //
 // Return the count of visible items in the working directory.
 //

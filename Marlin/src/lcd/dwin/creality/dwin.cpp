@@ -5679,6 +5679,12 @@ void Redraw_SD_List()
   select_file.reset();
   index_file = MROWS;
 
+  // Show the most recently changed file first, so the list matches what the
+  // card preview offers after inserting the card.
+  #if DISABLED(SDCARD_SORT_ALPHA)
+    card.sortByDate();
+  #endif
+
   // Leave title bar unchanged
   Clear_Menu_Area();
   Draw_Mid_Status_Area(true); // rock_20230529 //Update all parameters once
