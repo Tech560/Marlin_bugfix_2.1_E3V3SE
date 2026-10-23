@@ -15,6 +15,14 @@ Run `python3 test/test_bed_level_visualizer.py` from the repository root. It com
 
 Add `--preview-dir /tmp/bed-level-preview` to export LCD command previews as SVG. If ImageMagick is available, it also writes a PNG. Use `--sanitize` to enable UBSan when the host has its runtime installed.
 
+### Calibration tower generator (host)
+
+Run `python3 test/test_tower_gen.py` from the repository root. It compiles the production tower generator with a stubbed SD card and checks the emitted G-code for all three types: the temperature tower steps its nozzle temperature per band and keeps every move inside the bed, the retraction tower retracts around every contour with its own length per band and holds the temperature, and the ringing tower sends one ascending `M493 A<Hz>` per band without changing the temperature. It also checks the per-type clamping (retraction up to 3.0 mm, frequency up to 100 Hz, band count shortened instead of scheduling an invalid band), that each type writes its own 8.3 file name, and that writing is refused while printing or without a card. Set `E3V3SE_TEST_CXX` when the host compiler is not `g++`.
+
+### SD card file delete (host)
+
+Run `python3 test/test_sd_files.py` from the repository root. It compiles the production deletion module with a stubbed card reader and checks that nothing is removed without a card, while printing, while a host job is paused, for a folder or without a selection, that a normal delete passes the 8.3 name on and is reported only once the entry is gone, that a refused removal is reported as failed, and that every result has a short LCD line. Set `E3V3SE_TEST_CXX` when the host compiler is not `g++`.
+
 ### Marlin native unit tests
 
 Unit testing allows for functional testing of Marlin logic on a local machine. This strategy is available to all developers, and will be able to be used on generic GitHub workers to automate testing. While PlatformIO does support the execution of unit tests on target controllers, that is not yet implemented and not really practical. This would require dedicated testing labs, and would be less broadly usable than testing directly on the development or build machine.

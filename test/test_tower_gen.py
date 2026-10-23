@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the temperature tower generator that ships in the firmware. The SD card is
+"""Run the calibration tower generator that ships in the firmware. The SD card is
 stubbed, so the checks cover the emitted G-code itself, the settings clamping and
 the guards around writing the file."""
 import os
@@ -18,6 +18,7 @@ PROLOGUE = r'''
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -53,13 +54,34 @@ static float number_after(const std::string &line, const char axis) {
   return std::strtof(line.c_str() + at + 2, nullptr);
 }
 
+static std::string generate(TowerSettings &s) {
+  std::string file;
+  towerGen::Writer w;
+  w.begin(s);
+  char block[TOWER_BLOCK_SIZE];
+  while (w.next(block, sizeof(block))) {
+    assert(std::strlen(block) < TOWER_BLOCK_SIZE);      // never overruns the caller's buffer
+    file += block;
+  }
+  return file;
+}
+
+static size_t count_prefix(const std::string &file, const char *prefix) {
+  size_t n = 0;
+  for (size_t pos = 0; (pos = file.find(prefix, pos)) != std::string::npos; pos += std::strlen(prefix)) ++n;
+  return n;
+}
+
 int main() {
   TowerSettings &s = towerGen::settings();
 
-  // The defaults describe a printable tower and report its bottom band.
+  // The defaults describe a printable temperature tower and report its bottom band.
   towerGen::defaults();
-  assert(s.start_temp == 230 && s.step == 5 && s.bands == 5 && s.bed_temp == 60 && s.band_mm == 10);
+  assert(s.type == TOWER_TYPE_TEMP && s.start_temp == 230 && s.start == 0
+         && s.step == 5 && s.bands == 5 && s.bed_temp == 60 && s.band_mm == 10);
   assert(towerGen::last_temp(s) == 210);
+  assert(towerGen::last_band(s) == 210);
+  assert(std::strcmp(towerGen::file_name(s), TOWER_FILE_TEMP) == 0);
   assert(towerGen::valid(s));
 
   // Nonsense is pulled back into a printable range instead of overflowing.
@@ -74,20 +96,22 @@ int main() {
   towerGen::clamp(s);
   assert(s.bands * s.band_mm <= 100);
 
-  // Generating the default tower.
+  // Generating the default temperature tower.
   towerGen::defaults();
   std::string file;
-  towerGen::Writer w;
-  w.begin(s);
-  char block[TOWER_BLOCK_SIZE];
-  uint16_t blocks = 0;
-  while (w.next(block, sizeof(block))) {
-    assert(std::strlen(block) < TOWER_BLOCK_SIZE);      // never overruns the caller's buffer
-    file += block;
-    ++blocks;
+  {
+    towerGen::Writer w;
+    w.begin(s);
+    char block[TOWER_BLOCK_SIZE];
+    uint16_t blocks = 0;
+    while (w.next(block, sizeof(block))) {
+      assert(std::strlen(block) < TOWER_BLOCK_SIZE);      // never overruns the caller's buffer
+      file += block;
+      ++blocks;
+    }
+    assert(blocks > 500);                                  // header + skirt + bands + layers + footer
+    assert(!w.next(block, sizeof(block)));                 // and it stays finished
   }
-  assert(blocks > 500);                                  // header + skirt + bands + layers + footer
-  assert(!w.next(block, sizeof(block)));                 // and it stays finished
 
   // Header and footer.
   assert(file.rfind("; E3V3SE temperature tower", 0) == 0);
@@ -143,7 +167,84 @@ int main() {
   assert(tallest > 49.99f && tallest < 50.01f);          // five bands of 10 mm
   assert(zs[2 + 250] > 9.99f && zs[2 + 250] < 10.01f);   // relative lift at the end
 
-  // Writing the file guards on the card state and keeps the 8.3 name.
+  // --- Retraction tower -----------------------------------------------------
+  towerGen::type_defaults(TOWER_TYPE_RETRACT);
+  assert(s.type == TOWER_TYPE_RETRACT);
+  assert(s.start == 3 && s.step == 1 && s.start_temp == 210 && s.bands == 5);
+  assert(towerGen::last_band(s) == 7);                   // 0.3 .. 0.7 mm
+  assert(std::strcmp(towerGen::file_name(s), TOWER_FILE_RETRACT) == 0);
+  assert(towerGen::valid(s));
+
+  const std::string retract = generate(s);
+  assert(retract.rfind("; E3V3SE retraction tower\n; 210 C, 0.3 to 0.7 mm in 5 bands of 10 mm\n", 0) == 0);
+
+  // Each band carries its own retraction length in the comment and in the moves.
+  const int tenths[5] = { 3, 4, 5, 6, 7 };
+  size_t band_at = 0;
+  for (int b = 0; b < 5; ++b) {
+    char comment[64], move[32];
+    std::snprintf(comment, sizeof(comment), "; band %d/5 retract 0.%d mm\n", b + 1, tenths[b]);
+    std::snprintf(move, sizeof(move), "G1 E-0.%03d F1800\n", tenths[b] * 100);
+    const size_t at = retract.find(comment);
+    assert(at != std::string::npos);
+    assert(at >= band_at);
+    band_at = at;
+    assert(retract.find(move, at) != std::string::npos);
+  }
+  // Two contours per layer, 50 layers per band: one retract/unretract pair each.
+  assert(count_prefix(retract, "G1 E-") == 500);
+  assert(count_prefix(retract, "G1 E0.") == 500);
+  // The temperature is set once and stays put; only the cooldown follows.
+  assert(count_prefix(retract, "M104 S") == 2);
+  assert(retract.compare(retract.size() - 4, 4, "M84\n") == 0);
+
+  // --- Ringing tower --------------------------------------------------------
+  towerGen::type_defaults(TOWER_TYPE_RING);
+  assert(s.type == TOWER_TYPE_RING);
+  assert(s.start == 30 && s.step == 2 && s.start_temp == 210 && s.bands == 5);
+  assert(towerGen::last_band(s) == 38);
+  assert(std::strcmp(towerGen::file_name(s), TOWER_FILE_RING) == 0);
+  assert(towerGen::valid(s));
+
+  const std::string ring = generate(s);
+  assert(ring.rfind("; E3V3SE ringing tower\n; 210 C, 30 to 38 Hz in 5 bands of 10 mm\n", 0) == 0);
+
+  // One M493 per band, ascending, and no per-band temperature changes.
+  size_t shaper_at = 0;
+  for (int hz = 30; hz <= 38; hz += 2) {
+    char cmd[16];
+    std::snprintf(cmd, sizeof(cmd), "M493 A%d\n", hz);
+    const size_t at = ring.find(cmd, shaper_at);
+    assert(at != std::string::npos);
+    shaper_at = at + std::strlen(cmd);
+  }
+  assert(count_prefix(ring, "M493 A") == 5);
+  assert(count_prefix(ring, "M104 S") == 2);         // header preheat and cooldown only
+  assert(count_prefix(ring, "M109 S") == 1);
+
+  // --- Limits per type ------------------------------------------------------
+  s.type = TOWER_TYPE_RETRACT; s.start = 250; s.step = 200; s.bands = 50;
+  towerGen::clamp(s);
+  assert(s.start == 30 && s.step == 10 && s.bands == 1);
+  assert(towerGen::valid(s));
+
+  s.type = TOWER_TYPE_RETRACT; s.start = 0; s.step = 1; s.bands = 5;
+  towerGen::clamp(s);
+  assert(s.start == 1);                              // never a zero-length retraction
+  assert(towerGen::valid(s));
+
+  s.type = TOWER_TYPE_RING; s.start = 95; s.step = 5; s.bands = 5;
+  towerGen::clamp(s);
+  assert(s.start == 80 && s.start + (s.bands - 1) * s.step <= 100);
+  assert(towerGen::valid(s));
+
+  s.type = TOWER_TYPE_RING; s.start = 80; s.step = 10; s.bands = 5;
+  towerGen::clamp(s);
+  assert(s.bands == 3);                              // 80, 90, 100 Hz: the rest would be invalid
+  assert(towerGen::valid(s));
+
+  // --- Writing the file -----------------------------------------------------
+  towerGen::defaults();
   CardStub::printing = true;
   assert(!towerGen::write_file());
   CardStub::printing = false;
@@ -151,12 +252,19 @@ int main() {
   assert(!towerGen::write_file());
   CardStub::mounted = true;
   assert(towerGen::write_file());
-  assert(CardStub::name == TOWER_FILE);
-  assert(CardStub::data == file);                        // the file is exactly what Writer emits
-  assert(!CardStub::open);                               // and the file was closed again
+  assert(CardStub::name == TOWER_FILE_TEMP);
+  assert(CardStub::data == file);                    // the file is exactly what Writer emits
+  assert(!CardStub::open);                           // and the file was closed again
 
-  std::printf("PASS tower generator: %u blocks, %zu bytes, %zu Z moves, %.1f mm of filament\n",
-              unsigned(blocks), file.size(), zs.size(), double(total_e));
+  // Each type writes its own 8.3 name.
+  towerGen::type_defaults(TOWER_TYPE_RING);
+  assert(towerGen::write_file());
+  assert(CardStub::name == TOWER_FILE_RING);
+  assert(CardStub::data == ring);
+
+  std::printf("PASS tower generator: temp %zu bytes, retract %zu bytes, ring %zu bytes, "
+              "%d M493 bands, %zu Z moves\n",
+              file.size(), retract.size(), ring.size(), 5, zs.size());
   return 0;
 }
 '''

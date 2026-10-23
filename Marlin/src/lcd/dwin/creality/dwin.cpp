@@ -84,6 +84,7 @@ lin 3D Printer Firmware
 
 #include "../../../e3v3se/AutoOffset.h"
 #include "../../../e3v3se/PLRSettings.h"
+#include "../../../e3v3se/SDFiles.h"
 
 // #include <QRCodeGenerator.h>
 
@@ -1565,9 +1566,16 @@ inline bool Apply_Encoder(const ENCODER_DiffState &encoder_diffState, T &valref)
 
 #if ENABLED(DWIN_TOWER_GEN)
   #define PREPARE_CASE_TOWER (_PREPARE_CASE_AFTER_ZHEIGHT + 1)
-  #define PREPARE_CASE_TOTAL PREPARE_CASE_TOWER
+  #define _PREPARE_CASE_AFTER_TOWER PREPARE_CASE_TOWER
 #else
-  #define PREPARE_CASE_TOTAL _PREPARE_CASE_AFTER_ZHEIGHT
+  #define _PREPARE_CASE_AFTER_TOWER _PREPARE_CASE_AFTER_ZHEIGHT
+#endif
+
+#if ENABLED(SDSUPPORT)
+  #define PREPARE_CASE_SD (_PREPARE_CASE_AFTER_TOWER + 1)
+  #define PREPARE_CASE_TOTAL PREPARE_CASE_SD
+#else
+  #define PREPARE_CASE_TOTAL _PREPARE_CASE_AFTER_TOWER
 #endif
 
 
@@ -1986,12 +1994,29 @@ void Item_Prepare_CExtrude(const uint8_t row)
     void Item_Prepare_Tower(const uint8_t row)
     {
       Erase_Menu_Text(row);
-      DWIN_Draw_Label(MBASE(row) + 2, F("Temp tower"));
-      // Show the temperature span so the settings are visible before the page.
-      char range[8];
-      snprintf_P(range, sizeof(range), PSTR("%u-%u"),
-                 unsigned(towerGen::settings().start_temp),
-                 unsigned(uint16_t(towerGen::last_temp(towerGen::settings()))));
+      const TowerSettings &s = towerGen::settings();
+      char label[20];
+      snprintf_P(label, sizeof(label), PSTR("%s tower"), towerGen::type_name(s.type));
+      DWIN_Draw_Label(MBASE(row) + 2, label);
+      // Show the band span so the settings are visible before the page.
+      char range[10];
+      switch (s.type) {
+        case TOWER_TYPE_RETRACT:
+          snprintf_P(range, sizeof(range), PSTR("%u.%u-%u.%u"),
+                     unsigned(s.start / 10), unsigned(s.start % 10),
+                     unsigned(uint16_t(towerGen::last_band(s)) / 10),
+                     unsigned(uint16_t(towerGen::last_band(s)) % 10));
+          break;
+        case TOWER_TYPE_RING:
+          snprintf_P(range, sizeof(range), PSTR("%u-%uHz"),
+                     unsigned(s.start), unsigned(uint16_t(towerGen::last_band(s))));
+          break;
+        default:
+          snprintf_P(range, sizeof(range), PSTR("%u-%u"),
+                     unsigned(s.start_temp),
+                     unsigned(uint16_t(towerGen::last_temp(s))));
+          break;
+      }
       DWIN_Draw_String(false, false, font8x16, Color_White, Color_Bg_Black, VALUERANGE_X - 16, MBASE(row) + 3, range);
       Draw_Menu_Line(row, ICON_HotendTemp);
     }
@@ -2008,6 +2033,16 @@ void Item_Prepare_CExtrude(const uint8_t row)
       }
       Draw_Menu_Line(row, ICON_MoveZ);
       DWIN_Draw_IntValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 3, VALUERANGE_X, MBASE(row), CZ_AFTER_HOMING);
+    }
+#endif
+
+#if ENABLED(SDSUPPORT)
+    void Item_Prepare_SD(const uint8_t row)
+    {
+      Erase_Menu_Text(row);
+      DWIN_Draw_Label(MBASE(row) + 2, F("Delete file"));
+      Draw_Menu_Line(row, ICON_File);
+      Draw_More_Icon(row);
     }
 #endif
 
@@ -2091,6 +2126,11 @@ void Draw_Prepare_Menu()
 #if ENABLED(DWIN_TOWER_GEN)
   if (PVISI(PREPARE_CASE_TOWER))
     Item_Prepare_Tower(PSCROL(PREPARE_CASE_TOWER)); // Temperature tower >
+#endif
+
+#if ENABLED(SDSUPPORT)
+  if (PVISI(PREPARE_CASE_SD))
+    Item_Prepare_SD(PSCROL(PREPARE_CASE_SD)); // Delete an SD card file
 #endif
 
   if (select_prepare.now)
@@ -5578,6 +5618,10 @@ void Redraw_SD_List()
 bool DWIN_lcd_sd_status = false;
 bool pause_action_flag = false;
 
+// The same browser serves as the delete screen: a click then asks for
+// confirmation instead of opening the preview.
+bool sd_delete_mode = false;
+
 void SDCard_Up()
 {
   card.cdup();
@@ -5946,6 +5990,7 @@ void Draw_Info_Menu()
 
 void Draw_Print_File_Menu()
 {
+  sd_delete_mode = false;
   Clear_Title_Bar();
   HMI_flag.Refresh_bottom_flag = false; // Flag refresh bottom parameter
   if (HMI_flag.language < Language_Max)
@@ -6513,6 +6558,84 @@ void Goto_FilePreview()
   #endif
 }
 
+// Defined further down, but needed by the delete confirmation below.
+void HMI_AudioFeedback(const bool success);
+
+/*
+ * SD card delete browser: the file list is reused, and a click on a file asks
+ * for confirmation instead of opening the preview.
+ */
+static bool sd_delete_choice = false;   // false = Cancel, true = Delete
+
+static void Draw_SDDelete_Title() {
+  Clear_Title_Bar();
+  Draw_Title(F("Delete file"));
+}
+
+static void Draw_SDDelete_Confirm() {
+  Clear_Main_Window();
+  // Freeze the status bar, or it would redraw over the hint line.
+  HMI_flag.Refresh_bottom_flag = false;
+  DWIN_Draw_Rectangle(1, Color_Bg_Blue, 0, 0, DWIN_WIDTH - 1, 23);
+  DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
+                   (DWIN_WIDTH - strlen("Delete this file?") * MENU_CHR_W) / 2, 4, F("Delete this file?"));
+
+  // Show the name, so a wrong selection is caught before the file is gone.
+  char name[MENU_CHAR_LIMIT + 1];
+  strncpy(name, card.longest_filename(), MENU_CHAR_LIMIT);
+  name[MENU_CHAR_LIMIT] = '\0';
+  DWIN_Draw_String(false, true, font8x16, Color_White, Color_Bg_Black,
+                   (DWIN_WIDTH - strlen(name) * MENU_CHR_W) / 2, 40, name);
+
+  // Two choices, with the cursor on the highlighted one.
+  const uint8_t selected = sd_delete_choice ? 2 : 1;
+  DWIN_Draw_String(false, false, font8x16, sd_delete_choice ? Color_White : Color_Yellow,
+                   Color_Bg_Black, 70, MBASE(1) + 6, F("Cancel"));
+  DWIN_Draw_String(false, false, font8x16, sd_delete_choice ? Color_Yellow : Color_White,
+                   Color_Bg_Black, 70, MBASE(2) + 6, F("Delete"));
+  DWIN_Draw_Rectangle(0, Select_Color, 60, MBASE(selected) + 2, DWIN_WIDTH - 50, MBASE(selected) + 30);
+  DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 8, 292,
+                   F("Click: confirm   Turn: choose"));
+}
+
+static void HMI_SDDelete_Confirm() {
+  const ENCODER_DiffState state = get_encoder_state();
+  if (state == ENCODER_DIFF_NO) return;
+
+  if (state == ENCODER_DIFF_CW || state == ENCODER_DIFF_CCW) {
+    sd_delete_choice = !sd_delete_choice;
+    Draw_SDDelete_Confirm();
+  }
+  else if (state == ENCODER_DIFF_ENTER) {
+    checkkey = SelectFile;
+    if (!sd_delete_choice) {
+      Redraw_SD_List();
+      Draw_SDDelete_Title();
+    }
+    else {
+      const sdFiles::DeleteResult result = sdFiles::remove_selected();
+      HMI_AudioFeedback(sdFiles::deleted(result));
+      Redraw_SD_List();
+      char title[24];
+      strncpy(title, sdFiles::result_text(result), sizeof(title) - 1);
+      title[sizeof(title) - 1] = '\0';
+      Clear_Title_Bar();
+      Draw_Title(title);
+    }
+  }
+  DWIN_UpdateLCD();
+}
+
+static void Goto_SDManage() {
+  sd_delete_mode = true;
+  checkkey = SelectFile;
+  select_file.reset();
+  index_file = MROWS;
+  Redraw_SD_List();
+  Draw_SDDelete_Title();
+  DWIN_UpdateLCD();
+}
+
 // Select (and Print) File
 void HMI_SelectFile()
 {
@@ -6619,9 +6742,18 @@ void HMI_SelectFile()
   {
     if (select_file.now == 0)
     {
-      // Back
-      select_page.set(0);
-      Goto_MainMenu();
+      // In delete mode the browser returns to Prepare instead of the main menu.
+      if (sd_delete_mode) {
+        sd_delete_mode = false;
+        checkkey = Prepare;
+        select_prepare.set(PREPARE_CASE_SD);
+        index_prepare = _MAX(uint8_t(MROWS), uint8_t(PREPARE_CASE_SD));
+        Draw_Prepare_Menu();
+      }
+      else {
+        select_page.set(0);
+        Goto_MainMenu();
+      }
     }
     else if (hasUpDir && select_file.now == 1)
     {
@@ -6640,10 +6772,15 @@ void HMI_SelectFile()
         DWIN_UpdateLCD();
         return;
       }
+      else if (sd_delete_mode)
+      {
+        // Ask before deleting, and stay in the browser for the next file.
+        sd_delete_choice = false;   // default to Cancel
+        checkkey = SDDeleteConfirm;
+        Draw_SDDelete_Confirm();
+      }
       else
       {
-      
-      
         Goto_FilePreview();
       }
     }
@@ -8104,6 +8241,12 @@ void HMI_Prepare()
 #if ENABLED(DWIN_TOWER_GEN)
     case PREPARE_CASE_TOWER: // Generate a temperature tower
       Goto_TowerMenu();
+      break;
+#endif
+
+#if ENABLED(SDSUPPORT)
+    case PREPARE_CASE_SD: // Delete an SD card file
+      Goto_SDManage();
       break;
 #endif
 
@@ -11827,32 +11970,72 @@ void Remove_card_window_check(void)
 
 #if ENABLED(DWIN_TOWER_GEN)
   enum TowerMenuItem : uint8_t {
-    TOWER_BACK, TOWER_START, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT,
-    TOWER_WRITE, TOWER_PRINT
+    TOWER_BACK, TOWER_TYPE, TOWER_TEMP, TOWER_START, TOWER_STEP,
+    TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT
   };
   static select_t select_tower{0};
-  static uint8_t index_tower = MROWS, tower_edit_item = 0;
+  static uint8_t index_tower = MROWS, tower_edit_item = 0, tower_edit_row = 0;
   static int16_t tower_edit_value = 0;
 
-  static int16_t Tower_Menu_Value(const uint8_t item) {
+  // The rows depend on the type: a temperature tower has no separate start value.
+  static uint8_t tower_rows[10], tower_row_count = 0;
+
+  static void Tower_Build_Rows() {
+    static const uint8_t temp_rows[]  = { TOWER_BACK, TOWER_TYPE, TOWER_TEMP, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT };
+    static const uint8_t other_rows[] = { TOWER_BACK, TOWER_TYPE, TOWER_TEMP, TOWER_START, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT };
+    const bool temp = towerGen::settings().type == TOWER_TYPE_TEMP;
+    const uint8_t * const rows = temp ? temp_rows : other_rows;
+    tower_row_count = temp ? uint8_t(sizeof(temp_rows)) : uint8_t(sizeof(other_rows));
+    for (uint8_t i = 0; i < tower_row_count; ++i) tower_rows[i] = rows[i];
+  }
+
+  static const char* Tower_Label(const uint8_t item) {
+    const uint8_t type = towerGen::settings().type;
     switch (item) {
-      case TOWER_START:  return int16_t(towerGen::settings().start_temp);
-      case TOWER_STEP:   return int16_t(towerGen::settings().step);
-      case TOWER_BANDS:  return int16_t(towerGen::settings().bands);
-      case TOWER_BED:    return int16_t(towerGen::settings().bed_temp);
-      case TOWER_HEIGHT: return int16_t(towerGen::settings().band_mm);
+      case TOWER_TYPE:   return "Type";
+      case TOWER_TEMP:   return type == TOWER_TYPE_TEMP ? "Start C" : "Temp C";
+      case TOWER_START:  return type == TOWER_TYPE_RING ? "Start Hz" : "Start .1mm";
+      case TOWER_STEP:   return type == TOWER_TYPE_TEMP ? "Step C" : type == TOWER_TYPE_RING ? "Step Hz" : "Step .1mm";
+      case TOWER_BANDS:  return "Bands";
+      case TOWER_BED:    return "Bed C";
+      case TOWER_HEIGHT: return "Band mm";
+      case TOWER_WRITE:  return "Write to SD";
+      case TOWER_PRINT:  return "Write and print";
+      default:           return "Back";
+    }
+  }
+
+  static int16_t Tower_Menu_Value(const uint8_t item) {
+    const TowerSettings &s = towerGen::settings();
+    switch (item) {
+      case TOWER_TEMP:   return int16_t(s.start_temp);
+      case TOWER_START:  return int16_t(s.start);
+      case TOWER_STEP:   return int16_t(s.step);
+      case TOWER_BANDS:  return int16_t(s.bands);
+      case TOWER_BED:    return int16_t(s.bed_temp);
+      case TOWER_HEIGHT: return int16_t(s.band_mm);
       default: return 0;
     }
   }
 
   static int16_t Tower_Menu_Min(const uint8_t item) {
-    return item == TOWER_START ? 170 : item == TOWER_BANDS ? 1 : item == TOWER_HEIGHT ? 5 : 0;
+    const uint8_t type = towerGen::settings().type;
+    switch (item) {
+      case TOWER_TEMP:   return 170;
+      case TOWER_START:  return type == TOWER_TYPE_RING ? 10 : 1;
+      case TOWER_STEP:   return type == TOWER_TYPE_TEMP ? 0 : 1;
+      case TOWER_BANDS:  return 1;
+      case TOWER_HEIGHT: return 5;
+      default: return 0;
+    }
   }
 
   static int16_t Tower_Menu_Max(const uint8_t item) {
+    const uint8_t type = towerGen::settings().type;
     switch (item) {
-      case TOWER_START:  return HEATER_0_MAXTEMP;
-      case TOWER_STEP:   return 20;
+      case TOWER_TEMP:   return HEATER_0_MAXTEMP;
+      case TOWER_START:  return type == TOWER_TYPE_RING ? 80 : 30;
+      case TOWER_STEP:   return type == TOWER_TYPE_TEMP ? 20 : 10;
       case TOWER_BANDS:  return 10;
       case TOWER_BED:    return BED_MAXTEMP;
       case TOWER_HEIGHT: return 30;
@@ -11863,35 +12046,42 @@ void Remove_card_window_check(void)
   static void Draw_Tower_Value(const uint8_t item, const uint8_t row, const bool editing=false) {
     if (item == TOWER_BACK || item == TOWER_WRITE || item == TOWER_PRINT) return;
     const uint16_t bg = editing ? Select_Color : Color_Bg_Black;
+    if (item == TOWER_TYPE) {
+      char name[16];
+      strncpy(name, towerGen::type_name(towerGen::settings().type), sizeof(name) - 1);
+      name[sizeof(name) - 1] = '\0';
+      DWIN_Draw_String(false, false, font8x16, Color_White, bg, VALUERANGE_X - 16, MBASE(row) + 3, name);
+      return;
+    }
     const int16_t value = editing ? tower_edit_value : Tower_Menu_Value(item);
     DWIN_Draw_IntValue(true, true, 0, font8x16, Color_White, bg,
-                       item == TOWER_STEP || item == TOWER_BANDS || item == TOWER_HEIGHT ? 2 : 3,
+                       item == TOWER_TEMP || item == TOWER_BED ? 3 : 2,
                        VALUERANGE_X, MBASE(row) + 3, uint16_t(value));
   }
 
   static void Draw_Tower_Menu() {
-    static const char * const labels[] = {
-      "Back", "Start C", "Step C", "Bands", "Bed C", "Band mm",
-      "Write to SD", "Write and print"
-    };
+    Tower_Build_Rows();
     Clear_Main_Window();
-    Draw_Title(F("Temp tower"));
+    char title[20];
+    snprintf_P(title, sizeof(title), PSTR("%s tower"), towerGen::type_name(towerGen::settings().type));
+    Draw_Title(title);
     const uint8_t first = index_tower - MROWS;
-    for (uint8_t item = first; item <= index_tower && item <= TOWER_PRINT; ++item) {
-      const uint8_t row = item - first;
+    for (uint8_t row = 0; row <= MROWS && uint16_t(first) + row < tower_row_count; ++row) {
+      const uint8_t item = tower_rows[first + row];
       if (item == TOWER_BACK)
-        Draw_Back_First(select_tower.now == TOWER_BACK);
+        Draw_Back_First(select_tower.now == first + row);
       else {
-        Draw_Menu_Line(row, item >= TOWER_WRITE ? ICON_WriteEEPROM : ICON_HotendTemp, labels[item]);
+        Draw_Menu_Line(row, item >= TOWER_WRITE ? ICON_WriteEEPROM : ICON_HotendTemp, Tower_Label(item));
         Draw_Tower_Value(item, row);
       }
     }
-    if (select_tower.now) Draw_Menu_Cursor(select_tower.now - first);
+    if (select_tower.now >= first) Draw_Menu_Cursor(select_tower.now - first);
   }
 
   static void Goto_TowerMenu() {
     checkkey = TowerMenu;
     select_tower.reset();
+    Tower_Build_Rows();
     index_tower = MROWS;
     EncoderRate.enabled = false;
     HMI_flag.Refresh_bottom_flag = false;
@@ -11902,7 +12092,7 @@ void Remove_card_window_check(void)
     const ENCODER_DiffState state = get_encoder_state();
     if (state == ENCODER_DIFF_NO) return;
     if (state == ENCODER_DIFF_CW || state == ENCODER_DIFF_CCW) {
-      const bool changed = state == ENCODER_DIFF_CW ? select_tower.inc(TOWER_PRINT + 1) : select_tower.dec();
+      const bool changed = state == ENCODER_DIFF_CW ? select_tower.inc(tower_row_count) : select_tower.dec();
       if (changed) {
         if (select_tower.now > index_tower || select_tower.now < index_tower - MROWS) {
           index_tower = select_tower.now > index_tower ? select_tower.now : select_tower.now + MROWS;
@@ -11913,7 +12103,7 @@ void Remove_card_window_check(void)
       }
     }
     else if (state == ENCODER_DIFF_ENTER) {
-      const uint8_t item = select_tower.now;
+      const uint8_t item = tower_rows[select_tower.now];
       switch (item) {
         case TOWER_BACK:
           checkkey = Prepare;
@@ -11921,6 +12111,15 @@ void Remove_card_window_check(void)
           index_prepare = _MAX(uint8_t(MROWS), uint8_t(PREPARE_CASE_TOWER));
           Draw_Prepare_Menu();
           break;
+        case TOWER_TYPE: {
+          // Cycle the type and load its factory band values.
+          const uint8_t next = uint8_t((uint8_t(towerGen::settings().type) + 1) % 3);
+          towerGen::type_defaults(next);
+          select_tower.set(TOWER_TYPE);      // row 1 in both layouts
+          index_tower = MROWS;
+          Draw_Tower_Menu();
+          break;
+        }
         case TOWER_WRITE:
           HMI_AudioFeedback(towerGen::write_file());
           break;
@@ -11930,10 +12129,11 @@ void Remove_card_window_check(void)
           break;
         default:
           tower_edit_item = item;
+          tower_edit_row = select_tower.now + MROWS - index_tower;
           tower_edit_value = Tower_Menu_Value(item);
           checkkey = TowerValue;
           EncoderRate.enabled = true;
-          Draw_Tower_Value(item, item + MROWS - index_tower, true);
+          Draw_Tower_Value(item, tower_edit_row, true);
           break;
       }
     }
@@ -11951,7 +12151,8 @@ void Remove_card_window_check(void)
     else if (state == ENCODER_DIFF_ENTER) {
       TowerSettings &s = towerGen::settings();
       switch (tower_edit_item) {
-        case TOWER_START:  s.start_temp = uint16_t(tower_edit_value); break;
+        case TOWER_TEMP:   s.start_temp = uint16_t(tower_edit_value); break;
+        case TOWER_START:  s.start = uint8_t(tower_edit_value); break;
         case TOWER_STEP:   s.step = uint8_t(tower_edit_value); break;
         case TOWER_BANDS:  s.bands = uint8_t(tower_edit_value); break;
         case TOWER_BED:    s.bed_temp = uint8_t(tower_edit_value); break;
@@ -11966,7 +12167,7 @@ void Remove_card_window_check(void)
       DWIN_UpdateLCD();
       return;
     }
-    Draw_Tower_Value(tower_edit_item, tower_edit_item + MROWS - index_tower, checkkey == TowerValue);
+    Draw_Tower_Value(tower_edit_item, tower_edit_row, checkkey == TowerValue);
     DWIN_UpdateLCD();
   }
 #endif
@@ -12745,6 +12946,9 @@ void DWIN_HandleScreen()
     break;
   case SelectFile:
     HMI_SelectFile();
+    break;
+  case SDDeleteConfirm:
+    HMI_SDDelete_Confirm();
     break;
   case Prepare:
     HMI_Prepare();

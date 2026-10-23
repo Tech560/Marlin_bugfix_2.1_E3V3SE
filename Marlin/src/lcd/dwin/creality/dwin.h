@@ -221,6 +221,8 @@ enum processID : uint8_t {
   ThumbHomeoffset,
   ThumbPrint_window,
 #endif
+  // Delete confirmation for the file browser.
+  SDDeleteConfirm,
 };
 
 enum DC_language{

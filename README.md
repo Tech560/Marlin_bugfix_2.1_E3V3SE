@@ -289,6 +289,44 @@ The `c13_octoprint` profile enables the host layer in `Marlin/src/e3v3se/OctoHos
 This override should not be enabled when the bed sensor is required for safe
 operation. A disconnected sensor can otherwise go unnoticed.
 
+## Calibration towers: temperature, retraction and ringing
+
+**Prepare → Temp tower** (the label follows the selected type) writes a ready-to-print G-code tower to the card and can start it immediately, so a filament or the input shaper can be tuned without a slicer. With `DWIN_TOWER_GEN` on, the first menu row selects the type, and the rows below it change with that type:
+
+| Type | What changes per band | File |
+| --- | --- | --- |
+| Temp | Nozzle temperature, down by **Step C** per band | `TEMPTWR.GCO` |
+| Retract | Retraction length, up by **Step .1mm** (0.1 mm) per band | `RETRTWR.GCO` |
+| Ring | Shaper frequency, up by **Step Hz** per band with `M493 A<Hz>` | `RINGTWR.GCO` |
+
+A tower is a 20 × 20 mm hollow square with two walls at 0.2 mm layers, five bands of 10 mm by default. A temperature tower starts at the **Start C** band temperature; the retraction and ringing towers hold the **Temp C** row and start at **Start .1mm** or **Start Hz**. A retraction tower retracts around the travel of every contour, so each band shows the result of its own length. The generator keeps the values printable: retraction 0.1–3.0 mm, shaper frequency 10–100 Hz, band height 5–30 mm, at most 100 mm of tower, and it shortens the band count instead of scheduling invalid values. Changing the type loads that type's factory values; bands, bed temperature and band height are kept.
+
+The same generator is available over the serial port, which is handy for scripting:
+
+```gcode
+M8025 R1 S210 A3 T1 B5 H10 D60 W   ; retraction tower 0.3 → 0.7 mm, write only
+M8025 P                            ; write and print
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `R<0\|1\|2>` | Type: 0 temperature, 1 retraction, 2 ringing |
+| `S<°C>` | First band temperature, or the fixed print temperature |
+| `A<n>` | First retraction length in 0.1 mm, or first frequency in Hz |
+| `T<n>` | Step per band: °C, 0.1 mm, or Hz |
+| `B<n>` | Number of bands (1–10) |
+| `H<n>` | Band height in mm (5–30) |
+| `D<n>` | Bed temperature in °C |
+| `W` / `P` | Write the file / write it and start the print |
+
+A ringing tower sends `M493 A<Hz>` at the start of every band, so it only makes sense when `FT_MOTION` is enabled; the mode set with `M493 C` (ZV, EI, 3HEI…) is left alone and only the frequency is swept.
+
+## Deleting files from the SD card
+
+**Prepare → Delete file** opens the file browser in delete mode, so a crowded card can be cleaned without taking it out of the printer. A click on a file asks **Delete this file?** with **Cancel** selected first; turn to **Delete** and click to confirm, and the browser stays open for the next file. The title reports the outcome (`File deleted`, `Printing: not deleted`, `Not a file`, …). Folders can be opened to reach their files, but folders themselves, the file that is printing and anything while a job is paused are never deleted.
+
+There is deliberately no free-space readout: the FAT has to be scanned to know the free cluster count, which takes seconds up to tens of seconds on a large card and would freeze the LCD.
+
 ## Building
 
 PlatformIO is the build system. Use a recent PlatformIO Core (6.2 or newer).
