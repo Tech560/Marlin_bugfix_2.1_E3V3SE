@@ -6572,6 +6572,18 @@ static void Draw_SDDelete_Title() {
   Draw_Title(F("Delete file"));
 }
 
+// Only the two choices are repainted: clearing the whole window on every
+// click made the panel flash while the knob moved between Cancel and Delete.
+static void Draw_SDDelete_Choices() {
+  const uint8_t selected = sd_delete_choice ? 2 : 1;
+  DWIN_Draw_Rectangle(1, Color_Bg_Black, 60, MBASE(1) + 2, DWIN_WIDTH - 50, MBASE(2) + 30);
+  DWIN_Draw_String(false, false, font8x16, sd_delete_choice ? Color_White : Color_Yellow,
+                   Color_Bg_Black, 70, MBASE(1) + 6, F("Cancel"));
+  DWIN_Draw_String(false, false, font8x16, sd_delete_choice ? Color_Yellow : Color_White,
+                   Color_Bg_Black, 70, MBASE(2) + 6, F("Delete"));
+  DWIN_Draw_Rectangle(0, Select_Color, 60, MBASE(selected) + 2, DWIN_WIDTH - 50, MBASE(selected) + 30);
+}
+
 static void Draw_SDDelete_Confirm() {
   Clear_Main_Window();
   // Freeze the status bar, or it would redraw over the hint line.
@@ -6588,17 +6600,14 @@ static void Draw_SDDelete_Confirm() {
                    (DWIN_WIDTH - strlen(name) * MENU_CHR_W) / 2, 40, name);
 
   // Two choices, with the cursor on the highlighted one.
-  const uint8_t selected = sd_delete_choice ? 2 : 1;
-  DWIN_Draw_String(false, false, font8x16, sd_delete_choice ? Color_White : Color_Yellow,
-                   Color_Bg_Black, 70, MBASE(1) + 6, F("Cancel"));
-  DWIN_Draw_String(false, false, font8x16, sd_delete_choice ? Color_Yellow : Color_White,
-                   Color_Bg_Black, 70, MBASE(2) + 6, F("Delete"));
-  DWIN_Draw_Rectangle(0, Select_Color, 60, MBASE(selected) + 2, DWIN_WIDTH - 50, MBASE(selected) + 30);
+  Draw_SDDelete_Choices();
 
   // Keep the hint clear of the temperature block in the lower left corner.
+  // The panel draws the 6x12 font eight pixels wide, so centring with six
+  // pushed the end of the line past the right edge.
   char hint[] = "Click: confirm   Turn: choose";
   DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black,
-                   (DWIN_WIDTH - strlen(hint) * 6) / 2, 196, hint);
+                   (DWIN_WIDTH - strlen(hint) * MENU_CHR_W) / 2, 196, hint);
 }
 
 static void HMI_SDDelete_Confirm() {
@@ -6607,7 +6616,7 @@ static void HMI_SDDelete_Confirm() {
 
   if (state == ENCODER_DIFF_CW || state == ENCODER_DIFF_CCW) {
     sd_delete_choice = !sd_delete_choice;
-    Draw_SDDelete_Confirm();
+    Draw_SDDelete_Choices();
   }
   else if (state == ENCODER_DIFF_ENTER) {
     checkkey = SelectFile;
@@ -12080,23 +12089,28 @@ void Remove_card_window_check(void)
                        VALUERANGE_X, MBASE(row) + 3, uint16_t(value));
   }
 
+  // Repaint one row in place. Clearing the whole page for a single step made
+  // the panel flash while the list scrolled or the type changed.
+  static void Draw_Tower_Row(const uint8_t row, const uint8_t item) {
+    if (item == TOWER_BACK)
+      Draw_Back_First(false);
+    else {
+      Erase_Menu_Text(row);
+      Draw_Menu_Line(row, item >= TOWER_WRITE ? ICON_WriteEEPROM : ICON_HotendTemp, Tower_Label(item));
+      if (Tower_Is_Type_Row(item))
+        Draw_Chkb_Line(row, towerGen::settings().type == Tower_Row_Type(item));
+      else
+        Draw_Tower_Value(item, row);
+    }
+  }
+
   static void Draw_Tower_Menu() {
     Tower_Build_Rows();
     Clear_Main_Window();
     Draw_Title(F("Tower"));
     const uint8_t first = index_tower - MROWS;
-    for (uint8_t row = 0; row <= MROWS && uint16_t(first) + row < tower_row_count; ++row) {
-      const uint8_t item = tower_rows[first + row];
-      if (item == TOWER_BACK)
-        Draw_Back_First(select_tower.now == first + row);
-      else {
-        Draw_Menu_Line(row, item >= TOWER_WRITE ? ICON_WriteEEPROM : ICON_HotendTemp, Tower_Label(item));
-        if (Tower_Is_Type_Row(item))
-          Draw_Chkb_Line(row, towerGen::settings().type == Tower_Row_Type(item));
-        else
-          Draw_Tower_Value(item, row);
-      }
-    }
+    for (uint8_t row = 0; row <= MROWS && uint16_t(first) + row < tower_row_count; ++row)
+      Draw_Tower_Row(row, tower_rows[first + row]);
     if (select_tower.now >= first) Draw_Menu_Cursor(select_tower.now - first);
   }
 
@@ -12116,9 +12130,16 @@ void Remove_card_window_check(void)
     if (state == ENCODER_DIFF_CW || state == ENCODER_DIFF_CCW) {
       const bool changed = state == ENCODER_DIFF_CW ? select_tower.inc(tower_row_count) : select_tower.dec();
       if (changed) {
-        if (select_tower.now > index_tower || select_tower.now < index_tower - MROWS) {
-          index_tower = select_tower.now > index_tower ? select_tower.now : select_tower.now + MROWS;
-          Draw_Tower_Menu();
+        if (select_tower.now > index_tower) {
+          index_tower = select_tower.now;
+          // Shift the rows and redraw only the one that scrolls into view.
+          Scroll_Menu(DWIN_SCROLL_UP);
+          Draw_Tower_Row(MROWS, tower_rows[index_tower]);
+        }
+        else if (select_tower.now < index_tower - MROWS) {
+          index_tower--;
+          Scroll_Menu(DWIN_SCROLL_DOWN);
+          Draw_Tower_Row(0, tower_rows[index_tower - MROWS]);
         }
         else
           Move_Highlight(state == ENCODER_DIFF_CW ? 1 : -1, select_tower.now + MROWS - index_tower);
@@ -12138,9 +12159,17 @@ void Remove_card_window_check(void)
         case TOWER_RING_TYPE: {
           // Pick the type directly and load its factory band values.
           const uint8_t type = Tower_Row_Type(item);
-          if (towerGen::settings().type != type) towerGen::type_defaults(type);
-          index_tower = MROWS;               // the type rows stay in view
-          Draw_Tower_Menu();
+          if (towerGen::settings().type != type) {
+            towerGen::type_defaults(type);
+            Tower_Build_Rows();
+            index_tower = _MIN(index_tower, uint8_t(tower_row_count - 1));
+            // Only the labels and the checkboxes change, so the visible rows
+            // are repainted in place instead of clearing the whole page.
+            const uint8_t first = index_tower - MROWS;
+            for (uint8_t row = 0; row <= MROWS && uint16_t(first) + row < tower_row_count; ++row)
+              Draw_Tower_Row(row, tower_rows[first + row]);
+            if (select_tower.now >= first) Draw_Menu_Cursor(select_tower.now - first);
+          }
           break;
         }
         case TOWER_WRITE:
