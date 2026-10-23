@@ -301,9 +301,11 @@ void CardReader::forgetKeptName() {
 // Get file/folder info for an item by index
 //
 void CardReader::selectByIndex(MediaFile dir, const int16_t index) {
-  // readDir() clears the long name before reading it, so a single failed sector
-  // read aborts the scan and leaves the item with nothing but its 8.3 name.
-  // Give the scan one more try before settling for that.
+  // readDir() clears the long name before it reads one, so a scan can hand the
+  // entry back without it: when the read ran into trouble, and on the first line
+  // of the browser, which is read right after the date order was built. Reading
+  // the folder once more does deliver the name, so do not settle for the 8.3
+  // name on the first try.
   for (uint8_t pass = 0; pass < 2; ++pass) {
     if (pass) { dir.rewind(); hal.watchdog_refresh(); }
 
@@ -314,17 +316,21 @@ void CardReader::selectByIndex(MediaFile dir, const int16_t index) {
       if (!is_visible_entity(p)) continue;
       if (cnt++ != index) continue;
 
-      createFilename(filename, p);
-      restoreKeptName();  // Same file as last time, but the long name did not read?
-      setKeptName();
-      return;             // 0 based index
+      createFilename(filename, p);   // 0 based index
+      break;
     }
-    if (r == 0) return;   // Read to the end: this item is not in the folder
+
+    if (r == 0) return;               // Read to the end: this item is not here
+    if (longFilename[0]) {            // The entry came with its long name
+      restoreKeptName();
+      setKeptName();
+      return;
+    }
   }
 
-  // Both passes hit a read error. The first line of the browser is the newest
-  // item, whose name was read while the date order was built, so take that
-  // instead of leaving the name of another file on the line.
+  // Not found, or still without a long name. The first line of the browser is
+  // the newest item, whose name the date order read, so take that instead of
+  // leaving the name of another file on the line.
   if (index == newestIndex && newestLongName[0]) {
     selectNewestByIndex();
     return;
