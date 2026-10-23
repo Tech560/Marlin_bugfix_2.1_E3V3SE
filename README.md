@@ -291,7 +291,7 @@ operation. A disconnected sensor can otherwise go unnoticed.
 
 ## Calibration towers: temperature, retraction and ringing
 
-**Prepare → Temp tower** (the label follows the selected type) writes a ready-to-print G-code tower to the card and can start it immediately, so a filament or the input shaper can be tuned without a slicer. With `DWIN_TOWER_GEN` on, the first menu row selects the type, and the rows below it change with that type:
+**Prepare → tower** (the label follows the selected type) writes a ready-to-print G-code tower to the card and can start it immediately, so a filament or the input shaper can be tuned without a slicer. With `DWIN_TOWER_GEN` on, the **Temp tower**, **Retraction tower** and **Ringing tower** rows sit one below the other at the top of the page, with a check mark on the active one, and the value rows below them change with that type:
 
 | Type | What changes per band | File |
 | --- | --- | --- |

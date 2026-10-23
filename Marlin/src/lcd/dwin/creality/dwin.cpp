@@ -6594,8 +6594,11 @@ static void Draw_SDDelete_Confirm() {
   DWIN_Draw_String(false, false, font8x16, sd_delete_choice ? Color_Yellow : Color_White,
                    Color_Bg_Black, 70, MBASE(2) + 6, F("Delete"));
   DWIN_Draw_Rectangle(0, Select_Color, 60, MBASE(selected) + 2, DWIN_WIDTH - 50, MBASE(selected) + 30);
-  DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 8, 292,
-                   F("Click: confirm   Turn: choose"));
+
+  // Keep the hint clear of the temperature block in the lower left corner.
+  char hint[] = "Click: confirm   Turn: choose";
+  DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black,
+                   (DWIN_WIDTH - strlen(hint) * 6) / 2, 196, hint);
 }
 
 static void HMI_SDDelete_Confirm() {
@@ -7988,6 +7991,10 @@ void HMI_Prepare()
         if (index_prepare == PREPARE_CASE_TOWER)
           Item_Prepare_Tower(MROWS);
 #endif
+#if ENABLED(SDSUPPORT)
+        if (index_prepare == PREPARE_CASE_SD)
+          Item_Prepare_SD(MROWS);
+#endif
       }
       else
       {
@@ -8003,56 +8010,63 @@ void HMI_Prepare()
       {
         index_prepare--;
         Scroll_Menu(DWIN_SCROLL_DOWN);
-        DWIN_Draw_Rectangle(1, Color_Bg_Black, 180, MBASE(0) - 8, 238, MBASE(0 + 1) - 12); //
-        // index_prepare is the row that now sits on the top line, so name the
-        // items instead of repeating how many features happen to precede them.
-        if (index_prepare == MROWS)
+        // Clear the whole top label strip: a shorter name must not leave the
+        // tail of the previous one behind.
+        DWIN_Draw_Rectangle(1, Color_Bg_Black, LBLX, MBASE(0) - 8, DWIN_WIDTH - 1, MBASE(0) + 24);
+        // index_prepare is the item shown on the bottom line, so the one that
+        // moves into the top line is MROWS below it.
+        const uint8_t top_item = index_prepare - MROWS;
+        if (top_item == 0)
           Draw_Back_First();
-        else if (index_prepare == PREPARE_CASE_MOVE)
+        else if (top_item == PREPARE_CASE_MOVE)
           Item_Prepare_Move(0);
-        else if (index_prepare == PREPARE_CASE_DISA)
+        else if (top_item == PREPARE_CASE_DISA)
           Item_Prepare_Disable(0);
-        else if (index_prepare == PREPARE_CASE_HOME)
+        else if (top_item == PREPARE_CASE_HOME)
           Item_Prepare_Home(0);
 #if HAS_ZOFFSET_ITEM
-        else if (index_prepare == PREPARE_CASE_ZOFF)
+        else if (top_item == PREPARE_CASE_ZOFF)
           Item_Prepare_Offset(0);
 #endif
-        else if (index_prepare == PREPARE_CASE_INSTORK)
+        else if (top_item == PREPARE_CASE_INSTORK)
           Item_Prepare_instork(0);
-        else if (index_prepare == PREPARE_CASE_OUTSTORK)
+        else if (top_item == PREPARE_CASE_OUTSTORK)
           Item_Prepare_outstork(0);
 #if HAS_HOTEND
-        else if (index_prepare == PREPARE_CASE_PLA)
+        else if (top_item == PREPARE_CASE_PLA)
           Item_Prepare_PLA(0);
-        else if (index_prepare == PREPARE_CASE_TPU)
+        else if (top_item == PREPARE_CASE_TPU)
           Item_Prepare_TPU(0);
 #if ENABLED(EXTRA_PREHEAT_LABELS)
-        else if (index_prepare == PREPARE_CASE_PETG)
+        else if (top_item == PREPARE_CASE_PETG)
           Item_Prepare_PETG(0);
-        else if (index_prepare == PREPARE_CASE_ABS)
+        else if (top_item == PREPARE_CASE_ABS)
           Item_Prepare_ABS(0);
 #endif
 #endif
 #if HAS_PREHEAT
-        else if (index_prepare == PREPARE_CASE_COOL)
+        else if (top_item == PREPARE_CASE_COOL)
           Item_Prepare_Cool(0);
 #endif
-        else if (index_prepare == PREPARE_CASE_LANG)
+        else if (top_item == PREPARE_CASE_LANG)
           Item_Prepare_Lang(0);
-        else if (index_prepare == PREPARE_CASE_DISPLAY)
+        else if (top_item == PREPARE_CASE_DISPLAY)
           Item_Prepare_Display(0);
 #if ENABLED(DWIN_CUSTOM_EXTRUDE)
-        else if (index_prepare == PREPARE_CASE_CUSTOM_EXTRUDE)
+        else if (top_item == PREPARE_CASE_CUSTOM_EXTRUDE)
           Item_Prepare_CExtrude(0);
 #endif
 #if ENABLED(DWIN_ZHOME_MENU)
-        else if (index_prepare == PREPARE_CASE_ZHEIGHT)
+        else if (top_item == PREPARE_CASE_ZHEIGHT)
           Item_Prepare_Homeheight(0);
 #endif
 #if ENABLED(DWIN_TOWER_GEN)
-        else if (index_prepare == PREPARE_CASE_TOWER)
+        else if (top_item == PREPARE_CASE_TOWER)
           Item_Prepare_Tower(0);
+#endif
+#if ENABLED(SDSUPPORT)
+        else if (top_item == PREPARE_CASE_SD)
+          Item_Prepare_SD(0);
 #endif
       }
       else
@@ -11970,19 +11984,31 @@ void Remove_card_window_check(void)
 
 #if ENABLED(DWIN_TOWER_GEN)
   enum TowerMenuItem : uint8_t {
-    TOWER_BACK, TOWER_TYPE, TOWER_TEMP, TOWER_START, TOWER_STEP,
-    TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT
+    TOWER_BACK, TOWER_TEMP_TYPE, TOWER_RETRACT_TYPE, TOWER_RING_TYPE,
+    TOWER_TEMP, TOWER_START, TOWER_STEP, TOWER_BANDS, TOWER_BED,
+    TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT
   };
   static select_t select_tower{0};
   static uint8_t index_tower = MROWS, tower_edit_item = 0, tower_edit_row = 0;
   static int16_t tower_edit_value = 0;
 
+  // The three kinds sit together at the top, so the choice is visible at once.
+  static bool Tower_Is_Type_Row(const uint8_t item) {
+    return item == TOWER_TEMP_TYPE || item == TOWER_RETRACT_TYPE || item == TOWER_RING_TYPE;
+  }
+
+  static uint8_t Tower_Row_Type(const uint8_t item) {
+    return item == TOWER_RETRACT_TYPE ? TOWER_TYPE_RETRACT
+         : item == TOWER_RING_TYPE    ? TOWER_TYPE_RING
+         :                              TOWER_TYPE_TEMP;
+  }
+
   // The rows depend on the type: a temperature tower has no separate start value.
-  static uint8_t tower_rows[10], tower_row_count = 0;
+  static uint8_t tower_rows[12], tower_row_count = 0;
 
   static void Tower_Build_Rows() {
-    static const uint8_t temp_rows[]  = { TOWER_BACK, TOWER_TYPE, TOWER_TEMP, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT };
-    static const uint8_t other_rows[] = { TOWER_BACK, TOWER_TYPE, TOWER_TEMP, TOWER_START, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT };
+    static const uint8_t temp_rows[]  = { TOWER_BACK, TOWER_TEMP_TYPE, TOWER_RETRACT_TYPE, TOWER_RING_TYPE, TOWER_TEMP, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT };
+    static const uint8_t other_rows[] = { TOWER_BACK, TOWER_TEMP_TYPE, TOWER_RETRACT_TYPE, TOWER_RING_TYPE, TOWER_TEMP, TOWER_START, TOWER_STEP, TOWER_BANDS, TOWER_BED, TOWER_HEIGHT, TOWER_WRITE, TOWER_PRINT };
     const bool temp = towerGen::settings().type == TOWER_TYPE_TEMP;
     const uint8_t * const rows = temp ? temp_rows : other_rows;
     tower_row_count = temp ? uint8_t(sizeof(temp_rows)) : uint8_t(sizeof(other_rows));
@@ -11992,7 +12018,9 @@ void Remove_card_window_check(void)
   static const char* Tower_Label(const uint8_t item) {
     const uint8_t type = towerGen::settings().type;
     switch (item) {
-      case TOWER_TYPE:   return "Type";
+      case TOWER_TEMP_TYPE:    return "Temp tower";
+      case TOWER_RETRACT_TYPE: return "Retraction tower";
+      case TOWER_RING_TYPE:    return "Ringing tower";
       case TOWER_TEMP:   return type == TOWER_TYPE_TEMP ? "Start C" : "Temp C";
       case TOWER_START:  return type == TOWER_TYPE_RING ? "Start Hz" : "Start .1mm";
       case TOWER_STEP:   return type == TOWER_TYPE_TEMP ? "Step C" : type == TOWER_TYPE_RING ? "Step Hz" : "Step .1mm";
@@ -12044,15 +12072,8 @@ void Remove_card_window_check(void)
   }
 
   static void Draw_Tower_Value(const uint8_t item, const uint8_t row, const bool editing=false) {
-    if (item == TOWER_BACK || item == TOWER_WRITE || item == TOWER_PRINT) return;
+    if (item == TOWER_BACK || Tower_Is_Type_Row(item) || item == TOWER_WRITE || item == TOWER_PRINT) return;
     const uint16_t bg = editing ? Select_Color : Color_Bg_Black;
-    if (item == TOWER_TYPE) {
-      char name[16];
-      strncpy(name, towerGen::type_name(towerGen::settings().type), sizeof(name) - 1);
-      name[sizeof(name) - 1] = '\0';
-      DWIN_Draw_String(false, false, font8x16, Color_White, bg, VALUERANGE_X - 16, MBASE(row) + 3, name);
-      return;
-    }
     const int16_t value = editing ? tower_edit_value : Tower_Menu_Value(item);
     DWIN_Draw_IntValue(true, true, 0, font8x16, Color_White, bg,
                        item == TOWER_TEMP || item == TOWER_BED ? 3 : 2,
@@ -12062,9 +12083,7 @@ void Remove_card_window_check(void)
   static void Draw_Tower_Menu() {
     Tower_Build_Rows();
     Clear_Main_Window();
-    char title[20];
-    snprintf_P(title, sizeof(title), PSTR("%s tower"), towerGen::type_name(towerGen::settings().type));
-    Draw_Title(title);
+    Draw_Title(F("Tower"));
     const uint8_t first = index_tower - MROWS;
     for (uint8_t row = 0; row <= MROWS && uint16_t(first) + row < tower_row_count; ++row) {
       const uint8_t item = tower_rows[first + row];
@@ -12072,7 +12091,10 @@ void Remove_card_window_check(void)
         Draw_Back_First(select_tower.now == first + row);
       else {
         Draw_Menu_Line(row, item >= TOWER_WRITE ? ICON_WriteEEPROM : ICON_HotendTemp, Tower_Label(item));
-        Draw_Tower_Value(item, row);
+        if (Tower_Is_Type_Row(item))
+          Draw_Chkb_Line(row, towerGen::settings().type == Tower_Row_Type(item));
+        else
+          Draw_Tower_Value(item, row);
       }
     }
     if (select_tower.now >= first) Draw_Menu_Cursor(select_tower.now - first);
@@ -12111,12 +12133,13 @@ void Remove_card_window_check(void)
           index_prepare = _MAX(uint8_t(MROWS), uint8_t(PREPARE_CASE_TOWER));
           Draw_Prepare_Menu();
           break;
-        case TOWER_TYPE: {
-          // Cycle the type and load its factory band values.
-          const uint8_t next = uint8_t((uint8_t(towerGen::settings().type) + 1) % 3);
-          towerGen::type_defaults(next);
-          select_tower.set(TOWER_TYPE);      // row 1 in both layouts
-          index_tower = MROWS;
+        case TOWER_TEMP_TYPE:
+        case TOWER_RETRACT_TYPE:
+        case TOWER_RING_TYPE: {
+          // Pick the type directly and load its factory band values.
+          const uint8_t type = Tower_Row_Type(item);
+          if (towerGen::settings().type != type) towerGen::type_defaults(type);
+          index_tower = MROWS;               // the type rows stay in view
           Draw_Tower_Menu();
           break;
         }
