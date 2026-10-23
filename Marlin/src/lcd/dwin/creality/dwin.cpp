@@ -10109,17 +10109,18 @@ void Draw_Steps_Menu()
           break;
         case 1: // XY_DIAG_AC
           checkkey = skewxy_dac;
-          DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 3, 3, (VALUERANGE_X - 17), MBASE(1) + 3, xyskew_d_ac * 10000);
+          // Same hundredths as the list, so the value does not jump on entry.
+          DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 3, 2, (VALUERANGE_X - 10), MBASE(1) + 3, lroundf(xyskew_d_ac * 100.0f));
           EncoderRate.enabled = true;
           break;
         case 2: // XY_DIAG_BD
           checkkey = skewxy_dbd;
-          DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 3, 3, (VALUERANGE_X - 17), MBASE(2) + 3, xyskew_d_bd * 10000);
+          DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 3, 2, (VALUERANGE_X - 10), MBASE(2) + 3, lroundf(xyskew_d_bd * 100.0f));
           EncoderRate.enabled = true;
           break;
         case 3: // XY_SIDE_AD
           checkkey = skewxy_sad;
-          DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 3, 3, (VALUERANGE_X - 17), MBASE(3) + 3, xyskew_s_ad * 10000);
+          DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_White, Color_Bg_Black, 3, 2, (VALUERANGE_X - 10), MBASE(3) + 3, lroundf(xyskew_s_ad * 100.0f));
           EncoderRate.enabled = true;
           break;
 
@@ -10140,11 +10141,25 @@ void Draw_Steps_Menu()
 
               planner.skew_factor.xy = new_skew;
               settings.save();
+              // Changing the factor moves the current position, as M852 does.
+              motion.set_current_from_steppers_for_axis(ALL_AXES_ENUM);
+              motion.sync_plan_position();
 
               DWIN_Draw_Rectangle(1, All_Black, 0, 200, 240, 237);
-              const char *str = "Set Skew Factor Of:";
-              DWIN_Draw_String(true, true, font8x16, Color_Blue, Color_Bg_Black, (DWIN_WIDTH - strlen(str) * MENU_CHR_W) / 2, 210, F(str));   // Centered Received String
-              DWIN_Draw_FloatValue(true, true, 0, font8x16, Color_Blue, Color_Bg_Black, 2, 3, (DWIN_WIDTH - 10 * MENU_CHR_W) / 2, 230, planner.skew_factor.xy * 1000);
+              // Equal diagonals always give a factor of zero. Say so, because a
+              // bare 0.000 made the button look like it did nothing.
+              if (ABS(xyskew_d_ac - xyskew_d_bd) < 0.005f) {
+                const char *str = "Diagonals equal:";
+                DWIN_Draw_String(true, true, font8x16, Color_White, Color_Bg_Black, (DWIN_WIDTH - strlen(str) * MENU_CHR_W) / 2, 205, F(str));
+                const char *str2 = "no skew to set";
+                DWIN_Draw_String(true, true, font8x16, Color_Yellow, Color_Bg_Black, (DWIN_WIDTH - strlen(str2) * MENU_CHR_W) / 2, 227, F(str2));
+              }
+              else {
+                const char *str = "Skew factor set:";
+                DWIN_Draw_String(true, true, font8x16, Color_White, Color_Bg_Black, (DWIN_WIDTH - strlen(str) * MENU_CHR_W) / 2, 205, F(str));
+                // Four decimals: a small skew used to read as 0.000.
+                DWIN_Draw_Signed_Float(font8x16, Color_Bg_Black, 1, 4, (DWIN_WIDTH - 6 * MENU_CHR_W) / 2, 225, lroundf(new_skew * 10000.0f));
+              }
             }
 
           }
