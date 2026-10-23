@@ -2189,6 +2189,64 @@ void Item_Control_Diag(const uint8_t row)
   }
 #endif
 
+// Draw exactly one row of the Control list. Scrolling then repaints only the
+// row that moves into view instead of rebuilding the page, and the stock list
+// no longer loses the label of rows scrolled back up.
+static void Draw_Control_Row(const uint8_t item, const uint8_t row) {
+  const uint16_t label_x = TERN(DWIN_CREALITY_480_LCD, 60, 42);
+
+  switch (item) {
+    case 0:
+      Draw_Back_First(false);
+      break;
+
+    case CONTROL_CASE_TEMP:
+    case CONTROL_CASE_MOVE:
+      Erase_Menu_Text(row);
+      if (HMI_flag.language < Language_Max)
+        DWIN_ICON_Show(HMI_flag.language,
+                       item == CONTROL_CASE_TEMP ? LANGUAGE_Temp : LANGUAGE_Motion,
+                       label_x, MBASE(row) + JPN_OFFSET);
+      Draw_Menu_Line(row, item == CONTROL_CASE_TEMP ? ICON_Temperature : ICON_Motion, nullptr, true);
+      break;
+
+  #if ENABLED(EEPROM_SETTINGS)
+    case CONTROL_CASE_SAVE:
+    case CONTROL_CASE_LOAD:
+      Erase_Menu_Text(row);
+      if (HMI_flag.language < Language_Max)
+        DWIN_ICON_Show(HMI_flag.language,
+                       item == CONTROL_CASE_SAVE ? LANGUAGE_Store : LANGUAGE_Read,
+                       label_x, MBASE(row) + JPN_OFFSET);
+      Draw_Menu_Line(row, item == CONTROL_CASE_SAVE ? ICON_WriteEEPROM : ICON_ReadEEPROM);
+      break;
+
+    case CONTROL_CASE_RESET:
+      Erase_Menu_Text(row);
+      Item_Control_Reset(MBASE(row));
+      Draw_Menu_Line(row, ICON_ResumeEEPROM);
+      break;
+  #endif
+
+    case CONTROL_CASE_INFO:
+      Erase_Menu_Text(row);
+      Item_Control_Info(MBASE(row));
+      Draw_Menu_Line(row, ICON_Info, nullptr, true);
+      break;
+
+    case CONTROL_CASE_STATS: Item_Control_Stats(row); break;
+
+  #if ENABLED(DWIN_PLR_MENU)
+    case CONTROL_CASE_PLR: Item_Control_PLR(row); break;
+  #endif
+  #if ENABLED(DWIN_DIAG_LOG)
+    case CONTROL_CASE_DIAG: Item_Control_Diag(row); break;
+  #endif
+
+    default: break;
+  }
+}
+
 #if ENABLED(DWIN_PLR_MENU)
   static void Goto_PLRSettings();
 #endif
@@ -8407,37 +8465,9 @@ void HMI_Control()
       if (select_control.now > MROWS && select_control.now > index_control)
       {
         index_control = select_control.now;
-        // Scroll up and draw a blank bottom line
+        // Scroll up and draw the row that reaches the bottom line
         Scroll_Menu(DWIN_SCROLL_UP);
-
-        switch (index_control)
-        { // Last menu items
-        case CONTROL_CASE_RESET:
-          Item_Control_Reset(MBASE(MROWS));
-          Draw_Menu_Icon(MROWS, ICON_ResumeEEPROM);
-          break;
-        case CONTROL_CASE_INFO: // Info >
-          Item_Control_Info(MBASE(MROWS));
-          Draw_Menu_Icon(MROWS, ICON_Info);
-          DWIN_ICON_Show(ICON, ICON_More, 208, MBASE(MROWS) - 3);
-          break;
-        case CONTROL_CASE_STATS: // Printer Statistics >
-          Item_Control_Stats(MROWS);
-          break;
-#if ENABLED(DWIN_PLR_MENU)
-        case CONTROL_CASE_PLR:
-          Item_Control_PLR(MROWS);
-          break;
-#endif
-#if ENABLED(DWIN_DIAG_LOG)
-        case CONTROL_CASE_DIAG:
-          Item_Control_Diag(MROWS);
-          break;
-#endif
-
-        default:
-          break;
-        }
+        Draw_Control_Row(index_control, MROWS);
       }
       else
       {
@@ -8453,59 +8483,8 @@ void HMI_Control()
       {
         index_control--;
         Scroll_Menu(DWIN_SCROLL_DOWN);
-        if (index_control == MROWS)
-        {
-          Draw_Back_First();
-        }
-        else if (index_control == 6)
-        {
-          if (HMI_flag.language < Language_Max)
-          {
-            Draw_Menu_Icon(0, ICON_Temperature);
-            Draw_More_Icon(0);
-            DWIN_ICON_Show(HMI_flag.language, LANGUAGE_Temp, 42, MBASE(0) + JPN_OFFSET);
-          }
-        }
-        else if (index_control == 7)
-        {
-          if (HMI_flag.language < Language_Max)
-          {
-            Draw_Menu_Icon(0, ICON_Motion);
-            Draw_More_Icon(0);
-            DWIN_ICON_Show(HMI_flag.language, LANGUAGE_Motion, 42, MBASE(0) + JPN_OFFSET);
-          }
-        }
-        else if (index_control == 8)
-        {
-          if (HMI_flag.language < Language_Max)
-          {
-            Draw_Menu_Icon(0, ICON_WriteEEPROM);
-            DWIN_ICON_Show(HMI_flag.language, LANGUAGE_Store, 42, MBASE(0) + JPN_OFFSET);
-          }
-        }
-
-        // switch (index_control)
-        // { // First menu items
-        // case MROWS:
-        //   Draw_Back_First();
-        //   break;
-        // case MROWS + 1: // Temperature >
-        //   if (HMI_flag.language < Language_Max)
-        //   {
-        //     Draw_Menu_Icon(0, ICON_Temperature);
-        //     Draw_More_Icon(0);
-        //     // DWIN_Frame_AreaCopy(1, 57, 104, 84, 116, 60, 53); //Display the temperature to the upper left corner
-        //     // DWIN_ICON_Show(HMI_flag.language ,LANGUAGE_Temp_Title, TITLE_X, TITLE_Y);
-        //     DWIN_ICON_Show(HMI_flag.language, LANGUAGE_Temp, 42, MBASE(0) + JPN_OFFSET);
-        //     // DWIN_Draw_Line(Line_Color, 16, 49 + 33, BLUELINE_X, 49 + 34);
-        //   }
-        //   break;
-        // case MROWS + 2: // Move >
-        //   Draw_Menu_Line(0, ICON_Motion, GET_TEXT(MSG_MOTION), true);
-        //   // DWIN_Frame_AreaCopy(1,  87, 104, 114, 116, 60, 155);   //Motion >
-        // default:
-        //   break;
-        // }
+        // The row that scrolls into the top line is MROWS below the bottom one.
+        Draw_Control_Row(index_control - MROWS, 0);
       }
       else
       {
@@ -10637,11 +10616,14 @@ void Draw_DiagLog_Menu() {
 
   const uint8_t lines = diag_count();
   if (lines) {
+    // The panel draws this font eight pixels wide, so stop before the edge.
+    constexpr uint8_t MAX_CHARS = (DWIN_WIDTH - 8) / MENU_CHR_W;
     char text[DIAG_LINE_LEN];
     for (uint8_t i = 0; i < lines && i < DIAG_LINES; ++i) {
       // DWIN_Draw_String wants a mutable buffer, so hand it a copy.
       strncpy(text, diag_line(i), sizeof(text) - 1);
       text[sizeof(text) - 1] = '\0';
+      if (strlen(text) > MAX_CHARS) text[MAX_CHARS] = '\0';
       DWIN_Draw_String(false, false, font6x12, Color_White, Color_Bg_Black, 8, 40 + i * 14, text);
     }
   }
@@ -11887,24 +11869,33 @@ void Remove_card_window_check(void)
       DWIN_Draw_IntValue(true, true, 0, font8x16, Color_White, bg, 3, VALUERANGE_X, MBASE(row) + 3, value);
   }
 
-  static void Draw_PLRSettings_Menu() {
+  static const char* PLR_Label(const uint8_t item) {
     static const char * const labels[] = {
       "Back", "Enabled", "Heat bed on boot", "Heat nozzle on boot", "Bed extra C",
       "Auto C (0=off)", "Z lift mm", "Purge mm", "Save Z step mm", "Store settings"
     };
+    return item <= PLR_SAVE ? labels[item] : "";
+  }
+
+  // Repaint one row in place. Clearing the whole page for a single step made
+  // the panel flash while the list scrolled.
+  static void Draw_PLR_Row(const uint8_t row, const uint8_t item) {
+    if (item == PLR_BACK)
+      Draw_Back_First(false);
+    else {
+      Erase_Menu_Text(row);
+      Draw_Menu_Line(row, item == PLR_SAVE ? ICON_WriteEEPROM : ICON_Motion, PLR_Label(item));
+      Draw_PLR_Value(item, row);
+    }
+  }
+
+  static void Draw_PLRSettings_Menu() {
     Clear_Main_Window();
     Draw_Title(F("Power-loss recovery"));
     const uint8_t first = index_plr - MROWS;
-    for (uint8_t item = first; item <= index_plr && item <= PLR_SAVE; ++item) {
-      const uint8_t row = item - first;
-      if (item == PLR_BACK)
-        Draw_Back_First(select_plr.now == PLR_BACK);
-      else {
-        Draw_Menu_Line(row, item == PLR_SAVE ? ICON_WriteEEPROM : ICON_Motion, labels[item]);
-        Draw_PLR_Value(item, row);
-      }
-    }
-    if (select_plr.now) Draw_Menu_Cursor(select_plr.now - first);
+    for (uint8_t item = first; item <= index_plr && item <= PLR_SAVE; ++item)
+      Draw_PLR_Row(item - first, item);
+    if (select_plr.now >= first) Draw_Menu_Cursor(select_plr.now - first);
   }
 
   static void Goto_PLRSettings() {
@@ -11922,9 +11913,16 @@ void Remove_card_window_check(void)
     if (state == ENCODER_DIFF_CW || state == ENCODER_DIFF_CCW) {
       const bool changed = state == ENCODER_DIFF_CW ? select_plr.inc(PLR_SAVE + 1) : select_plr.dec();
       if (changed) {
-        if (select_plr.now > index_plr || select_plr.now < index_plr - MROWS) {
-          index_plr = select_plr.now > index_plr ? select_plr.now : select_plr.now + MROWS;
-          Draw_PLRSettings_Menu();
+        if (select_plr.now > index_plr) {
+          index_plr = select_plr.now;
+          // Shift the rows and redraw only the one that scrolls into view.
+          Scroll_Menu(DWIN_SCROLL_UP);
+          Draw_PLR_Row(MROWS, index_plr);
+        }
+        else if (select_plr.now < index_plr - MROWS) {
+          index_plr--;
+          Scroll_Menu(DWIN_SCROLL_DOWN);
+          Draw_PLR_Row(0, index_plr - MROWS);
         }
         else
           Move_Highlight(state == ENCODER_DIFF_CW ? 1 : -1, select_plr.now + MROWS - index_plr);
