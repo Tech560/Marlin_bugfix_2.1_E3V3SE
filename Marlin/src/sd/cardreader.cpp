@@ -80,6 +80,7 @@ CardReader card;
 
 card_flags_t CardReader::flag;
 char CardReader::filename[FILENAME_LENGTH], CardReader::longFilename[LONG_FILENAME_LENGTH];
+char CardReader::keptShortName[FILENAME_LENGTH], CardReader::keptLongName[LONG_FILENAME_LENGTH];
 
 IF_DISABLED(NO_SD_AUTOSTART, uint8_t CardReader::autofile_index); // = 0
 
@@ -255,19 +256,55 @@ int16_t CardReader::countVisibleItems(MediaFile dir) {
 }
 
 //
+// Keep the long name that belongs to the selected 8.3 name
+//
+void CardReader::setKeptName() {
+  strlcpy(keptShortName, filename, sizeof(keptShortName));
+  strlcpy(keptLongName, longFilename, sizeof(keptLongName));
+}
+
+//
+// Put the kept long name back if the selected item came back without one
+//
+void CardReader::restoreKeptName() {
+  if (!longFilename[0] && keptLongName[0] && !strcmp(keptShortName, filename))
+    strlcpy(longFilename, keptLongName, sizeof(longFilename));
+}
+
+//
+// Forget the kept name when the working directory changes
+//
+void CardReader::forgetKeptName() {
+  keptShortName[0] = keptLongName[0] = '\0';
+}
+
+//
 // Get file/folder info for an item by index
 //
 void CardReader::selectByIndex(MediaFile dir, const int16_t index) {
-  dir_t p;
-  for (int16_t cnt = 0; dir.readDir(&p, longFilename) > 0;) {
-    if (is_visible_entity(p)) {
-      if (cnt == index) {
-        createFilename(filename, p);
-        return;  // 0 based index
-      }
-      cnt++;
+  // readDir() clears the long name before reading it, so a single failed sector
+  // read aborts the scan and leaves the item with nothing but its 8.3 name.
+  // Give the scan one more try before settling for that.
+  for (uint8_t pass = 0; pass < 2; ++pass) {
+    if (pass) { dir.rewind(); hal.watchdog_refresh(); }
+
+    dir_t p;
+    int16_t cnt = 0;
+    int8_t r;
+    while ((r = dir.readDir(&p, longFilename)) > 0) {
+      if (!is_visible_entity(p)) continue;
+      if (cnt++ != index) continue;
+
+      createFilename(filename, p);
+      restoreKeptName();  // Same file as last time, but the long name did not read?
+      setKeptName();
+      return;             // 0 based index
     }
+    if (r == 0) return;   // Read to the end: this item is not in the folder
   }
+
+  // Both passes hit a read error. Stay with the item and its long name.
+  restoreKeptName();
 }
 
 //
@@ -1310,6 +1347,7 @@ void CardReader::cd(const char * relpath) {
     if (workDirDepth < MAX_DIR_DEPTH)
       workDirParents[workDirDepth++] = workDir;
     nrItems = -1;
+    forgetKeptName();
     TERN_(SDCARD_SORT_ALPHA, presort());
   }
   else
@@ -1323,6 +1361,7 @@ int8_t CardReader::cdup() {
   if (workDirDepth > 0) {                                               // At least 1 dir has been saved
     nrItems = -1;
     workDir = --workDirDepth ? workDirParents[workDirDepth - 1] : root; // Use parent, or root if none
+    forgetKeptName();
     TERN_(SDCARD_SORT_ALPHA, presort());
   }
   if (!workDirDepth) flag.workDirIsRoot = true;
@@ -1337,6 +1376,7 @@ void CardReader::cdroot() {
   flag.workDirIsRoot = true;
   workDirDepth = 0;
   nrItems = -1;
+  forgetKeptName();
   TERN_(SDCARD_SORT_ALPHA, presort());
 }
 

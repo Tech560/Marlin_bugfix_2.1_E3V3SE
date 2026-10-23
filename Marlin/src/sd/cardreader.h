@@ -103,6 +103,12 @@ public:
   static char filename[FILENAME_LENGTH],            // DOS 8.3 filename of the selected item
               longFilename[LONG_FILENAME_LENGTH];   // Long name of the selected item
 
+  // Long name remembered for the selected 8.3 name. A directory read that
+  // fails mid-scan leaves longFilename empty, and the browser should then keep
+  // showing the long name instead of dropping back to the 8.3 name.
+  static char keptShortName[FILENAME_LENGTH],
+              keptLongName[LONG_FILENAME_LENGTH];
+
   // Fast! binary file transfer
   #if ENABLED(BINARY_FILE_TRANSFER)
     #if HAS_MULTI_SERIAL
@@ -428,6 +434,9 @@ private:
   static bool is_visible_entity(const dir_t &p OPTARG(CUSTOM_FIRMWARE_UPLOAD, const bool binFiles=false));
   static int16_t countVisibleItems(MediaFile dir);
   static void selectByIndex(MediaFile dir, const int16_t index);
+  static void setKeptName();
+  static void restoreKeptName();
+  static void forgetKeptName();
   static void selectByName(MediaFile dir, const char * const match);
   static void printListing(
     MediaFile parent, const char * const prepend, const uint8_t lsflags
