@@ -113,6 +113,7 @@ public:
   // browser offers that item on the first line, so its name survives a failed
   // scan of that line.
   static int16_t newestIndex;
+  static bool newestIsDir;
   static char newestShortName[FILENAME_LENGTH],
               newestLongName[LONG_FILENAME_LENGTH];
 

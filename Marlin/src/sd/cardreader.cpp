@@ -82,6 +82,7 @@ card_flags_t CardReader::flag;
 char CardReader::filename[FILENAME_LENGTH], CardReader::longFilename[LONG_FILENAME_LENGTH];
 char CardReader::keptShortName[FILENAME_LENGTH], CardReader::keptLongName[LONG_FILENAME_LENGTH];
 int16_t CardReader::newestIndex = -1;
+bool CardReader::newestIsDir;
 char CardReader::newestShortName[FILENAME_LENGTH], CardReader::newestLongName[LONG_FILENAME_LENGTH];
 
 IF_DISABLED(NO_SD_AUTOSTART, uint8_t CardReader::autofile_index); // = 0
@@ -283,7 +284,7 @@ void CardReader::restoreKeptName() {
 void CardReader::selectNewestByIndex() {
   strlcpy(filename, newestShortName, sizeof(filename));
   strlcpy(longFilename, newestLongName, sizeof(longFilename));
-  flag.filenameIsDir = false;
+  flag.filenameIsDir = newestIsDir;
   setBinFlag(false);
   setKeptName();
 }
@@ -1762,37 +1763,46 @@ void CardReader::cdroot() {
    * card's own order rather than showing a half-sorted list.
    */
   void CardReader::sortByDate() {
-    date_order_count = 0;
-    newestIndex = -1;
-    newestShortName[0] = newestLongName[0] = '\0';
-    int16_t count = 0;
-    workDir.rewind();
-    for (dir_t p; workDir.readDir(&p, longFilename) > 0;) {
-      if (!is_visible_entity(p)) continue;
-      if (count == SD_DATE_ORDER_MAX) { date_order_count = -1; return; }
+    // The first read of a folder can hand the entries back without their long
+    // names, and the name the browser puts on its first line is read here. When
+    // that name is missing, build the same order again instead of leaving the
+    // short 8.3 name for that line.
+    for (uint8_t pass = 0; pass < 2; ++pass) {
+      date_order_count = 0;
+      newestIndex = -1;
+      newestShortName[0] = newestLongName[0] = '\0';
+      int16_t count = 0;
+      workDir.rewind();
+      for (dir_t p; workDir.readDir(&p, longFilename) > 0;) {
+        if (!is_visible_entity(p)) continue;
+        if (count == SD_DATE_ORDER_MAX) { date_order_count = -1; return; }
 
-      const uint32_t stamp = uint32_t(p.lastWriteDate) << 16 | p.lastWriteTime;
-      const uint8_t item = uint8_t(count++);
-      int16_t i = item;
-      while (i > 0 && date_stamp[i - 1] < stamp) {
-        date_stamp[i] = date_stamp[i - 1];
-        date_order[i] = date_order[i - 1];
-        --i;
+        const uint32_t stamp = uint32_t(p.lastWriteDate) << 16 | p.lastWriteTime;
+        const uint8_t item = uint8_t(count++);
+        int16_t i = item;
+        while (i > 0 && date_stamp[i - 1] < stamp) {
+          date_stamp[i] = date_stamp[i - 1];
+          date_order[i] = date_order[i - 1];
+          --i;
+        }
+        date_stamp[i] = stamp;
+        date_order[i] = item;   // same count as selectByIndex uses
+
+        // Keep the name of the item the browser will show first, so that line
+        // cannot lose it to a later read.
+        if (!i) {
+          newestIndex = item;
+          newestIsDir = flag.filenameIsDir;
+          createFilename(newestShortName, p);
+          strlcpy(newestLongName, longFilename, sizeof(newestLongName));
+        }
+
+        hal.watchdog_refresh();
       }
-      date_stamp[i] = stamp;
-      date_order[i] = item;   // same count as selectByIndex uses
+      date_order_count = count;
 
-      // Keep the name of the item the browser will show first, so that line
-      // cannot lose it to a later read error.
-      if (!i && !flag.filenameIsDir) {
-        newestIndex = item;
-        createFilename(newestShortName, p);
-        strlcpy(newestLongName, longFilename, sizeof(newestLongName));
-      }
-
-      hal.watchdog_refresh();
+      if (!count || newestIndex < 0 || newestLongName[0]) return;
     }
-    date_order_count = count;
   }
 
 #endif // !SDCARD_SORT_ALPHA
