@@ -11892,6 +11892,8 @@ void Remove_card_window_check(void)
   static void Draw_PLRSettings_Menu() {
     Clear_Main_Window();
     Draw_Title(F("Power-loss recovery"));
+    // Draw the temperature and speed block at the bottom, like the other menus.
+    Draw_Mid_Status_Area(true);
     const uint8_t first = index_plr - MROWS;
     for (uint8_t item = first; item <= index_plr && item <= PLR_SAVE; ++item)
       Draw_PLR_Row(item - first, item);
@@ -12106,6 +12108,8 @@ void Remove_card_window_check(void)
     Tower_Build_Rows();
     Clear_Main_Window();
     Draw_Title(F("Tower"));
+    // Draw the temperature and speed block at the bottom, like the other menus.
+    Draw_Mid_Status_Area(true);
     const uint8_t first = index_tower - MROWS;
     for (uint8_t row = 0; row <= MROWS && uint16_t(first) + row < tower_row_count; ++row)
       Draw_Tower_Row(row, tower_rows[first + row]);
