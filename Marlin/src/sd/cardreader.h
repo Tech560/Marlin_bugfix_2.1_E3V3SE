@@ -109,6 +109,13 @@ public:
   static char keptShortName[FILENAME_LENGTH],
               keptLongName[LONG_FILENAME_LENGTH];
 
+  // Name of the newest item, read while the browser builds its date order. The
+  // browser offers that item on the first line, so its name survives a failed
+  // scan of that line.
+  static int16_t newestIndex;
+  static char newestShortName[FILENAME_LENGTH],
+              newestLongName[LONG_FILENAME_LENGTH];
+
   // Fast! binary file transfer
   #if ENABLED(BINARY_FILE_TRANSFER)
     #if HAS_MULTI_SERIAL
@@ -436,6 +443,7 @@ private:
   static void selectByIndex(MediaFile dir, const int16_t index);
   static void setKeptName();
   static void restoreKeptName();
+  static void selectNewestByIndex();
   static void forgetKeptName();
   static void selectByName(MediaFile dir, const char * const match);
   static void printListing(

@@ -81,6 +81,8 @@ CardReader card;
 card_flags_t CardReader::flag;
 char CardReader::filename[FILENAME_LENGTH], CardReader::longFilename[LONG_FILENAME_LENGTH];
 char CardReader::keptShortName[FILENAME_LENGTH], CardReader::keptLongName[LONG_FILENAME_LENGTH];
+int16_t CardReader::newestIndex = -1;
+char CardReader::newestShortName[FILENAME_LENGTH], CardReader::newestLongName[LONG_FILENAME_LENGTH];
 
 IF_DISABLED(NO_SD_AUTOSTART, uint8_t CardReader::autofile_index); // = 0
 
@@ -264,18 +266,35 @@ void CardReader::setKeptName() {
 }
 
 //
-// Put the kept long name back if the selected item came back without one
+// Put a long name back if the selected item came back without one
 //
 void CardReader::restoreKeptName() {
-  if (!longFilename[0] && keptLongName[0] && !strcmp(keptShortName, filename))
-    strlcpy(longFilename, keptLongName, sizeof(longFilename));
+  if (!longFilename[0]) {
+    if (keptLongName[0] && !strcmp(keptShortName, filename))
+      strlcpy(longFilename, keptLongName, sizeof(longFilename));
+    else if (newestLongName[0] && !strcmp(newestShortName, filename))
+      strlcpy(longFilename, newestLongName, sizeof(longFilename));
+  }
 }
 
 //
-// Forget the kept name when the working directory changes
+// Select the newest item from the name the date order read for it
+//
+void CardReader::selectNewestByIndex() {
+  strlcpy(filename, newestShortName, sizeof(filename));
+  strlcpy(longFilename, newestLongName, sizeof(longFilename));
+  flag.filenameIsDir = false;
+  setBinFlag(false);
+  setKeptName();
+}
+
+//
+// Forget the remembered names when the working directory changes
 //
 void CardReader::forgetKeptName() {
   keptShortName[0] = keptLongName[0] = '\0';
+  newestIndex = -1;
+  newestShortName[0] = newestLongName[0] = '\0';
 }
 
 //
@@ -303,7 +322,15 @@ void CardReader::selectByIndex(MediaFile dir, const int16_t index) {
     if (r == 0) return;   // Read to the end: this item is not in the folder
   }
 
-  // Both passes hit a read error. Stay with the item and its long name.
+  // Both passes hit a read error. The first line of the browser is the newest
+  // item, whose name was read while the date order was built, so take that
+  // instead of leaving the name of another file on the line.
+  if (index == newestIndex && newestLongName[0]) {
+    selectNewestByIndex();
+    return;
+  }
+
+  // Otherwise stay with the item and the long name it already had.
   restoreKeptName();
 }
 
@@ -1722,6 +1749,8 @@ void CardReader::cdroot() {
    */
   void CardReader::sortByDate() {
     date_order_count = 0;
+    newestIndex = -1;
+    newestShortName[0] = newestLongName[0] = '\0';
     int16_t count = 0;
     workDir.rewind();
     for (dir_t p; workDir.readDir(&p, longFilename) > 0;) {
@@ -1729,14 +1758,24 @@ void CardReader::cdroot() {
       if (count == SD_DATE_ORDER_MAX) { date_order_count = -1; return; }
 
       const uint32_t stamp = uint32_t(p.lastWriteDate) << 16 | p.lastWriteTime;
-      int16_t i = count++;
+      const uint8_t item = uint8_t(count++);
+      int16_t i = item;
       while (i > 0 && date_stamp[i - 1] < stamp) {
         date_stamp[i] = date_stamp[i - 1];
         date_order[i] = date_order[i - 1];
         --i;
       }
       date_stamp[i] = stamp;
-      date_order[i] = uint8_t(count - 1);   // same count as selectByIndex uses
+      date_order[i] = item;   // same count as selectByIndex uses
+
+      // Keep the name of the item the browser will show first, so that line
+      // cannot lose it to a later read error.
+      if (!i && !flag.filenameIsDir) {
+        newestIndex = item;
+        createFilename(newestShortName, p);
+        strlcpy(newestLongName, longFilename, sizeof(newestLongName));
+      }
+
       hal.watchdog_refresh();
     }
     date_order_count = count;
