@@ -2554,9 +2554,12 @@ void Draw_Tune_Menu()
     }
 
     void Scroll_Menu_Thumb(const uint8_t dir) {
-      HMI_flag.Refresh_bottom_flag = false;
-      DWIN_Frame_AreaMove(1, dir, MLINE, Color_Bg_Black, 11, TUNE_MENU_START_Y +30, DWIN_WIDTH - 1, 320 - 1); // Pan interface
-      // Ensure the header stays in place
+      // Shift the list only: the area extends to the status block at the bottom
+      // otherwise, which smeared it over the last row.
+      DWIN_Frame_AreaMove(1, dir, MLINE, Color_Bg_Black, 11, TUNE_MENU_START_Y + 30,
+                          DWIN_WIDTH - 1, THUMB_MBASE(ThumbMROWS) + 27);
+      // Clear the strip the list shifted out of, then keep the header in place
+      DWIN_Draw_Rectangle(1, Color_Bg_Black, 0, TUNE_MENU_START_Y, DWIN_WIDTH - 1, TUNE_MENU_START_Y + 34);
       DWIN_ICON_Show(HMI_flag.language, LANGUAGE_Setup, 27, TUNE_MENU_START_Y);
       switch (dir) {
         case DWIN_SCROLL_DOWN:
@@ -2656,10 +2659,33 @@ void Draw_Tune_Menu()
 
 
 
+    // Draw one item of the Tune list at a given row, so both scroll directions
+    // can repaint the row that enters instead of leaving the old one behind.
+    void Thumb_Draw_Tune_Row(const uint8_t item, const uint8_t row) {
+      switch (item) {
+        case 0: Thumb_Draw_Back_First(false); break;
+        case TUNE_CASE_SPEED: Thumb_Item_Tune_Speed(row); break;
+        #if HAS_HOTEND
+          case TUNE_CASE_TEMP: Thumb_Item_Tune_Temp(row); break;
+          case TUNE_CASE_FLOW: Thumb_Item_Tune_Flow(row); break;
+        #endif
+        #if HAS_HEATED_BED
+          case TUNE_CASE_BED: Thumb_Item_Tune_Bed(row); break;
+          case TUNE_CASE_FAN: Thumb_Item_Tune_Fan(row); break;
+        #endif
+        #if HAS_ZOFFSET_ITEM
+          case TUNE_CASE_ZOFF: Thumb_Item_Tune_Zoffset(row); break;
+        #endif
+        default: break;
+      }
+    }
+
     void Draw_ThumbTune_Menu() {
       // Draw_ThumbTitle(vvfilename); 
       OctoRefresh = false; 
       Clear_Below_Area();
+      // The list uses this area down to the bottom edge, so leave the bottom
+      // block out of it; the periodic update would draw over the last row.
       HMI_flag.Refresh_bottom_flag = true;
       const int16_t Oscroll = ThumbMROWS - thumb_index_tune; // Scrolled-up lines
       #define OTSCROL(L) (Oscroll + (L))
@@ -10770,6 +10796,7 @@ void HMI_ThumbPrint()
       select_tune.reset();
       HMI_flag.Refresh_bottom_flag = false; // Flag refresh bottom parameter
       index_tune = MROWS;
+      thumb_index_tune = ThumbMROWS; // a previous visit may have scrolled it
       Draw_ThumbTune_Menu();
       break;
     case 1: // Press Pause
@@ -10796,7 +10823,6 @@ void HMI_ThumbPrint()
 }
 
 void HMI_ThumbTune() {
-  HMI_flag.Refresh_bottom_flag = true;
   ENCODER_DiffState encoder_diffState = get_encoder_state();
   if (encoder_diffState == ENCODER_DIFF_NO)
     return;
@@ -10805,17 +10831,10 @@ void HMI_ThumbTune() {
     if (select_tune.inc(1 + TUNE_CASE_TOTAL)) {
       if (select_tune.now > ThumbMROWS && select_tune.now > thumb_index_tune) {
         thumb_index_tune = select_tune.now;
-        HMI_flag.Refresh_bottom_flag = true;
         Scroll_Menu_Thumb(DWIN_SCROLL_UP);
-        
-        DWIN_Draw_Rectangle(1, Color_Bg_Black, 0,268,240,330); // Clear the last line
-
-        uint8_t new_row = ThumbMROWS;
-        switch (thumb_index_tune) {
-          case TUNE_CASE_FAN:  Thumb_Item_Tune_Fan(new_row); break;
-          case TUNE_CASE_BED:  Thumb_Item_Tune_Bed(new_row); break;
-          case TUNE_CASE_ZOFF: Thumb_Item_Tune_Zoffset(new_row); break;
-        }
+        // Clear the row that scrolls into view, then draw it.
+        DWIN_Draw_Rectangle(1, Color_Bg_Black, 10, THUMB_MBASE(ThumbMROWS) - 8, 239, THUMB_MBASE(ThumbMROWS) + 27);
+        Thumb_Draw_Tune_Row(thumb_index_tune, ThumbMROWS);
       } else {
         Move_Highlight_Thumb(1, select_tune.now + ThumbMROWS - thumb_index_tune);
       }
@@ -10824,20 +10843,11 @@ void HMI_ThumbTune() {
     if (select_tune.dec()) {
       if (select_tune.now < thumb_index_tune - ThumbMROWS) {
         thumb_index_tune--;
-        HMI_flag.Refresh_bottom_flag = true;
         Scroll_Menu_Thumb(DWIN_SCROLL_DOWN);
-        
-       
-
-        if (thumb_index_tune == ThumbMROWS) {
-          Thumb_Draw_Back_First();
-        }else if(thumb_index_tune == 4) {
-          Thumb_Item_Tune_Speed(0);
-        } else if (thumb_index_tune == 5) {
-          Thumb_Item_Tune_Temp(0);
-        } else if (thumb_index_tune == 6) {
-          Thumb_Item_Tune_Flow(0);
-        }
+        // The row that scrolls into the top line is ThumbMROWS below the last.
+        DWIN_Draw_Rectangle(1, Color_Bg_Black, 10, THUMB_MBASE(0) - 8, 239, THUMB_MBASE(0) + 27);
+        Thumb_Draw_Tune_Row(thumb_index_tune - ThumbMROWS, 0);
+        Thumb_Draw_Menu_Cursor(0); // the clear also removed the cursor bar
       } else {
         Move_Highlight_Thumb(-1, select_tune.now + ThumbMROWS - thumb_index_tune);
       }
