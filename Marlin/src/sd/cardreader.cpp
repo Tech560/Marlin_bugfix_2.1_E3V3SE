@@ -301,6 +301,14 @@ void CardReader::forgetKeptName() {
 // Get file/folder info for an item by index
 //
 void CardReader::selectByIndex(MediaFile dir, const int16_t index) {
+  // The first line of the browser is the newest item. Its name was read while
+  // the date order was built, so use that instead of reading the folder for it
+  // again: that first read is the one that comes back without the long name.
+  if (index == newestIndex && newestLongName[0]) {
+    selectNewestByIndex();
+    return;
+  }
+
   // readDir() clears the long name before it reads one, so a scan can hand the
   // entry back without it: when the read ran into trouble, and on the first line
   // of the browser, which is read right after the date order was built. Reading
