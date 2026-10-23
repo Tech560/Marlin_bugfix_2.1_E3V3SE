@@ -6644,8 +6644,10 @@ static void Draw_SDDelete_Choices() {
 
 static void Draw_SDDelete_Confirm() {
   Clear_Main_Window();
-  // Freeze the status bar, or it would redraw over the hint line.
+  // The window clear also wipes the temperature and speed block, so draw it
+  // again below the hint; the periodic update keeps it live from there.
   HMI_flag.Refresh_bottom_flag = false;
+  Draw_Mid_Status_Area(true);
   DWIN_Draw_Rectangle(1, Color_Bg_Blue, 0, 0, DWIN_WIDTH - 1, 23);
   DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
                    (DWIN_WIDTH - strlen("Delete this file?") * MENU_CHR_W) / 2, 4, F("Delete this file?"));
@@ -10549,7 +10551,9 @@ void HMI_Pstats()
 /* Mesh History */
 void Draw_MeshHistory_Menu() {
   Clear_Main_Window();
-  HMI_flag.Refresh_bottom_flag = true;
+  HMI_flag.Refresh_bottom_flag = false;
+  // Same temperature and speed block as the menu pages, below this page's text.
+  Draw_Mid_Status_Area(true);
   Draw_Back_First();
 
   DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
@@ -10608,7 +10612,9 @@ void HMI_MeshHistory() {
 /* Diagnostics */
 void Draw_DiagLog_Menu() {
   Clear_Main_Window();
-  HMI_flag.Refresh_bottom_flag = true;
+  HMI_flag.Refresh_bottom_flag = false;
+  // Same temperature and speed block as the menu pages, below the log lines.
+  Draw_Mid_Status_Area(true);
   Draw_Back_First();
 
   DWIN_Draw_String(false, false, DWIN_FONT_HEAD, Color_White, Color_Bg_Blue,
