@@ -10800,15 +10800,25 @@ void HMI_ThumbPrint()
       Draw_ThumbTune_Menu();
       break;
     case 1: // Press Pause
-        if(isPaused){ //If already paused
-          SERIAL_ECHOLNPGM("M9000 resume-job");
+      // isPaused is only maintained for OctoPrint, so on a normal print the
+      // page kept offering the pause dialog again instead of resuming. Ask the
+      // printer whether it is paused and resume when it is.
+      if (isPaused || marlin.printingIsPaused()) {
+        #if ENABLED(OCTOPRINT_PLUGIN)
           isPaused = false;
-          Goto_ThumbPrint();
-
-        }else{
-          checkkey = ThumbPrint_window;
-          ThumbPopup_PauseOrStop();
-        }
+          SERIAL_ECHOLNPGM("M9000 resume-job");
+        #else
+          if (HMI_flag.cloud_printing_flag && !HMI_flag.filement_resume_flag)
+            SERIAL_ECHOLN("M79 S3");
+          pause_resume_feedstock(FEEDING_DEF_DISTANCE, FEEDING_DEF_SPEED);
+          queue.inject("M24");
+        #endif
+        Goto_ThumbPrint();
+      }
+      else {
+        checkkey = ThumbPrint_window;
+        ThumbPopup_PauseOrStop();
+      }
       break;
     case 2: // Stop
       HMI_flag.select_flag = true;
