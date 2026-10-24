@@ -267,6 +267,13 @@ void CardReader::setKeptName() {
 }
 
 //
+// Keep the name of what is selected right now (the preview shows it)
+//
+void CardReader::rememberSelection() {
+  if (longFilename[0]) setKeptName();
+}
+
+//
 // Put a long name back if the selected item came back without one
 //
 void CardReader::restoreKeptName() {
@@ -329,7 +336,7 @@ void CardReader::selectByIndex(MediaFile dir, const int16_t index) {
       break;
     }
 
-    if (r == 0) return;               // Read to the end: this item is not here
+    if (r == 0) break;                // Read to the end: this item is not here
     if (longFilename[0]) {            // The entry came with its long name
       restoreKeptName();
       setKeptName();

@@ -5693,8 +5693,18 @@ void Redraw_SD_List()
   if (card.isMounted())
   {
     // As many files as will fit
-    LOOP_L_N(i, _MIN(nr_sd_menu_items(), MROWS))
+    const uint16_t rows = _MIN(nr_sd_menu_items(), MROWS);
+    LOOP_L_N(i, rows)
     Draw_SDItem(i, i + 1);
+
+    // The newest file is on the first line, and that is the line a folder read
+    // is most likely to hand back without its long name. Read it once more now
+    // that the rest of the list is read, and draw it again if that brought the
+    // name in.
+    if (rows) {
+      card.selectFileByIndexSorted(0);
+      if (card.longest_filename() == card.filename) Draw_SDItem(0, 1);
+    }
 
     TERN_(SCROLL_LONG_FILENAMES, Init_SDItem_Shift());
   }
@@ -6602,6 +6612,10 @@ void Goto_FilePreview()
 {
   strncpy(my_short_fn, card.filename, sizeof(my_short_fn) - 1);
   my_short_fn[sizeof(my_short_fn) - 1] = '\0';
+
+  // The title below shows this file's long name. Keep it, so the browser can
+  // still show it when a later read of the folder comes back without it.
+  card.rememberSelection();
 
   #if ENABLED(DWIN_RENDER_THUMBNAIL)
 

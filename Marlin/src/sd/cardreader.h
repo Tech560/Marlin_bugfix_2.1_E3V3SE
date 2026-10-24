@@ -296,6 +296,12 @@ public:
    */
   static const char* diveToFile(const bool update_cwd, MediaFile* &inDirPtr, const char * const path, const bool echo=false);
 
+  /**
+   * Remember the long name of the current selection, so a later read of the
+   * folder that comes back without it can put it back.
+   */
+  static void rememberSelection();
+
   #if ENABLED(SDCARD_SORT_ALPHA)
     static void presort();
     static void selectFileByIndexSorted(const int16_t nr);
