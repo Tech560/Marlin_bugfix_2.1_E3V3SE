@@ -45,6 +45,7 @@ At runtime, G-code handlers under `Marlin/src/gcode/` call core motion/planner/p
 ### Automatic Z-offset / load-cell path
 
 - `D_ROUTINE_AUTO_OFFSET` is enabled in the inspected primary config; `X_ROUTINE_AUTO_OFFSET` is commented out there.
+- `Z_SAFE_HOMING_X_POINT`/`Y_POINT` are pinned to 110 in the `c13_sd` profile, and `E3V3SE_NOZZLE_AS_PROBE` clears the probe's X/Y offset after `settings.first_load()` (`Marlin/src/e3v3se/ProbeXY.cpp`): G28 subtracts that offset, so a stored `M851 X/Y` used to park Auto Home beside the bed centre. The Z offset stays untouched.
 - `USE_AUTOZ_TOOL_2` gates much of `Marlin/src/module/AutoOffset.cpp` and `AutoOffset.h`. This custom subsystem reads an HX711 load cell and contains acquisition/filtering and multi-point offset-estimation logic; it is not simply standard Marlin probe-offset code.
 - `Marlin/src/gcode/probe/M8015.cpp` is the one-key offset command path. The DWIN UI includes controls and calls into offset routines in `Marlin/src/lcd/dwin/creality/` on current C13. Keep probe state, bed-level data, planner synchronization, homing, UI flags, and EEPROM save behavior in view when modifying it.
 - `CZ_AFTER_HOMING` is a DWIN Z-height value declared/initialized only for `DWIN_ZHOME_MENU`. Commit `4c1173a9f3` (2026-07-06) fixed its missing declaration/definition behavior: the Configuration option guard and the corresponding DWIN definition must remain paired. References also exist in `probe.h`, `motion.cpp`, `settings.cpp`, and the DWIN UI.

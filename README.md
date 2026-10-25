@@ -207,7 +207,15 @@ The assessment selects the best rating that satisfies **both** original limits:
 | BAD | 2.0 | 1.0 |
 | HORRIBLE | Above either BAD limit | Above either BAD limit |
 
-Missing measurements appear gray and receive `INCOMPLETE` instead of a quality rating; an uninitialized mesh shows a message to run bed leveling. The viewer sends one drawing command at a time with at least `BED_LEVEL_VISUALIZER_DRAW_DELAY_MS` between commands (10 ms by default, minimum 5 ms). This pacing covers the initial screen, QR, legend, surface rectangles and grid lines, preventing an uninterrupted flood of drawing commands. Increase the interval, for example to 20 ms, if a panel needs more time. Pressing the encoder returns to Leveling with Bed Level Map selected, even while drawing; temperature management continues between commands. The viewer reads a snapshot of the mesh without moving the printer or changing calibration. It requires `AUTO_BED_LEVELING_BILINEAR` and can be selected in the GitHub Actions build dialog (the workflow toggle defaults to off).
+Missing measurements appear gray and receive `INCOMPLETE` instead of a quality rating; an uninitialized mesh shows a message to run bed leveling. The viewer sends one drawing command at a time with at least `BED_LEVEL_VISUALIZER_DRAW_DELAY_MS` between commands (10 ms by default, minimum 5 ms). This pacing covers the initial screen, QR, legend, surface rectangles and grid lines, preventing an uninterrupted flood of drawing commands. Increase the interval, for example to 20 ms, if a panel needs more time. Pressing the encoder returns to Leveling with Bed Level Map selected, even while drawing; temperature management continues between commands. The viewer reads a snapshot of the mesh without moving the printer or changing calibration. It requires `AUTO_BED_LEVELING_BILINEAR` and can be selected in the GitHub Actions build dialog (the workflow toggle defaults to on; turn it off for a lean build).
+
+### Auto Home, the Z-offset routine and the probe offset
+
+The `c13_sd` profile builds the **four-point** auto Z-offset routine (`D_ROUTINE_AUTO_OFFSET`). The five-point `X_ROUTINE_AUTO_OFFSET` probes an extra back-right point at `180,180` that the code itself marks as too far from the load cell, and on hardware it left the head beside the bed centre after Auto Home. The workflow defaults select the four-point routine for the same reason.
+
+`Z_SAFE_HOMING_X_POINT` and `Z_SAFE_HOMING_Y_POINT` are pinned to `110`, so Auto Home always ends in the middle of the bed instead of following the computed `X_CENTER`/`Y_CENTER`.
+
+G28 moves the nozzle to that point **minus the probe's XY offset**, and a stored offset survives a firmware update, so a leftover `M851 X-24.2 Y-15` parked the head at `X 134.2 / Y 125.0` on every home and probed every mesh point in the wrong place. The nozzle is the probe on this machine, which has no XY offset worth compensating, so `E3V3SE_NOZZLE_AS_PROBE` clears the probe's X and Y offset once after the settings are loaded ([`ProbeXY.cpp`](Marlin/src/e3v3se/ProbeXY.cpp), called from `MarlinCore.cpp`). The Z offset is left alone: that one calibrates the first layer. Because the clear also runs after a settings restore, neither a reflash nor an SD backup can move Auto Home again.
 
 ## Input shaping with FT_Motion (`M493`)
 
@@ -343,7 +351,7 @@ The `c13_sd` branch (C13 SD card) ships a manual workflow, [`build-marlin.yml`](
 
 1. Open your fork on GitHub, go to **Actions**, and select **Build E3V3SE Firmware**. If workflows are disabled in the fork, click **I understand my workflows, go ahead and enable them**.
 2. Click **Run workflow** and choose the `c13_sd` branch.
-3. Keep the environment at `STM32F103RET6_creality` and set the feature toggles you want (thumbnails, Z-offset routines, FT_Motion, DWIN menus, preheat labels and so on). The defaults match the committed configuration of this branch: `ONE_CLICK_PRINT` on; `OCTOPRINT_PLUGIN` and MeatPack are not offered.
+3. Keep the environment at `STM32F103RET6_creality` and set the feature toggles you want (thumbnails, Z-offset routines, FT_Motion, DWIN menus, preheat labels and so on). The defaults follow the committed configuration of this branch: `ONE_CLICK_PRINT` on, the four-point `D_ROUTINE_AUTO_OFFSET` on; `OCTOPRINT_PLUGIN` and MeatPack are not offered. `BED_LEVEL_VISUALIZER` is the one exception: the workflow turns it on by default for the filled bed mesh, while the committed configuration ships it off.
 4. Click **Run workflow** and wait for the job to finish. The log ends with a RAM and flash usage report.
 5. Download the `firmware-c13_sd-STM32F103RET6_creality` artifact from the run summary. It contains the `firmware*.bin` file and is kept for 7 days.
 
