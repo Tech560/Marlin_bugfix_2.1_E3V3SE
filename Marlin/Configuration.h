@@ -1012,6 +1012,7 @@
 #define THERMAL_PROTECTION_HOTENDS // Enable thermal protection for all extruders
 #define THERMAL_PROTECTION_BED     // Enable thermal protection for the heated bed
 //#define E3V3SE_IGNORE_BED_MINTEMP // E3V3SE: Do not halt on a bed MINTEMP reading (flaky/missing bed sensor). Thermal runaway and heating-failed protection stay active.
+#define E3V3SE_NOZZLE_AS_PROBE   // E3V3SE: the nozzle is the Z probe, so a stored XY probe offset may not shift G28 and the mesh points
 #define THERMAL_PROTECTION_CHAMBER // Enable thermal protection for the heated chamber
 #define THERMAL_PROTECTION_COOLER  // Enable thermal protection for the laser cooling
 
