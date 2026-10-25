@@ -16,7 +16,7 @@ on:
       bed_level_visualizer:
         description: "BED_LEVEL_VISUALIZER (filled isometric bed mesh in Leveling)"
         type: boolean
-        default: false
+        default: true
       d_routine_auto_offset:
         description: "D_ROUTINE_AUTO_OFFSET (Z offset, Delta pattern)"
         type: boolean
