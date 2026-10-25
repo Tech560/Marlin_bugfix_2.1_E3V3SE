@@ -7470,6 +7470,14 @@ void HMI_Confirm()
     else if (Set_high == HMI_flag.boot_step) // Boot boot failed.
     {
       // SERIAL_ECHOLNPGM("#### HMI_Confirm 2nd IF ", Set_high, " ", HMI_flag.boot_step);
+      // The auto Z offset can genuinely fail (probe not triggering, dirty bed).
+      // Retry it twice, then leave the wizard so the printer stays usable.
+      static uint8_t boot_home_fails = 0;
+      if (HMI_flag.Need_boot_flag && ++boot_home_fails > 2) {
+        boot_home_fails = 0;
+        DWIN_AbortBootWizard();
+        return;
+      }
       HMI_flag.boot_step = Set_high; // After the current height adjustment fails, repeat the height adjustment operation.
       // SERIAL_ECHOLNPGM("### HMI_flag.boot_step set Offset:", HMI_flag.boot_step);
       Popup_Window_Height(Nozz_Start); // Jump to height page
@@ -14025,6 +14033,25 @@ void DWIN_CompletedLeveling()
 {
   if (checkkey == Leveling)
     Goto_MainMenu();
+}
+
+/**
+ * Leave the first-boot wizard after the auto Z offset or the boot leveling
+ * failed. Without this the wizard stays unfinished, so every power-up runs it
+ * again and Control and Leveling are never reachable. The stored settings are
+ * reloaded so a half-done measurement (M8015 clears the Z offset and the mesh
+ * before it starts) cannot leave the printer with a zero offset.
+ */
+void DWIN_AbortBootWizard()
+{
+  HMI_flag.boot_step = Boot_Step_Max;
+  Save_Boot_Step_Value();      // Never run the wizard again on the next boot
+  HMI_flag.Need_boot_flag = false;
+  HMI_flag.local_leveling_flag = false;
+  HMI_flag.Pressure_Height_end = false;
+  TERN_(EEPROM_SETTINGS, (void)settings.load());
+  select_page.set(0);
+  Goto_MainMenu();
 }
 
 // GUI extension

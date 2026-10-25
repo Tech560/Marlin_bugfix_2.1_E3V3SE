@@ -922,6 +922,7 @@ void DWIN_Show_M117(char* str);
 void DWIN_CompletedHoming();
 void DWIN_CompletedHeight();
 void DWIN_CompletedLeveling();
+void DWIN_AbortBootWizard();
 void HMI_SetLanguage();
 
 void Popup_window_Filament(void);

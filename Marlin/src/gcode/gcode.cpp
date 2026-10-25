@@ -75,6 +75,10 @@ GcodeSuite gcode;
 
 #include "../MarlinCore.h" // for idle, kill
 
+#if ENABLED(DWIN_CREALITY_LCD)
+  #include "../lcd/dwin/creality/dwin.h"   // for the first-boot wizard
+#endif
+
 // Inactivity shutdown
 millis_t GcodeSuite::previous_move_ms = 0,
          GcodeSuite::max_inactive_time = 0;
@@ -286,6 +290,16 @@ void GcodeSuite::dwell(const millis_t time) {
     #if ENABLED(G29_HALT_ON_FAILURE)
       #ifdef ACTION_ON_CANCEL
         hostui.cancel();
+      #endif
+      #if ENABLED(DWIN_CREALITY_LCD)
+        // A failed leveling during the first-boot wizard must not halt the
+        // printer: the wizard would stay unfinished, so the next power-up runs
+        // it again and Control and Leveling can never be reached. Finish the
+        // wizard instead and keep the printer usable.
+        if (HMI_flag.Need_boot_flag) {
+          DWIN_AbortBootWizard();
+          return;
+        }
       #endif
       marlin.kill(GET_TEXT_F(MSG_LCD_PROBING_FAILED));
     #endif
