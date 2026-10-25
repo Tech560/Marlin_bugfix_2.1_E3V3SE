@@ -142,7 +142,7 @@
 // |       *        |
 // |                |
 // |  *          *  |
-#define X_ROUTINE_AUTO_OFFSET  // Enable this to calculate the Z offset automatically using the 5 points of the bed, (X) pattern
+// #define X_ROUTINE_AUTO_OFFSET  // Enable this to calculate the Z offset automatically using the 5 points of the bed, (X) pattern
 
 // |                |
 // |  *             |   
@@ -150,7 +150,7 @@
 // |       *        |
 // |                |
 // |  *          *  |
-// #define D_ROUTINE_AUTO_OFFSET  // Enable this to calculate the Z offset automatically using the 4 points of the bed, (Delta) pattern
+#define D_ROUTINE_AUTO_OFFSET  // Enable this to calculate the Z offset automatically using the 4 points of the bed, (Delta) pattern
 
 
 #define USE_SWITCH_POWER_200W  0 //Default 1: Using a 200W power supply, the nozzle and heating bed cannot be heated at the same time. 0: The >200w power supply used has sufficient power and can be heated at the same time.
@@ -2525,8 +2525,8 @@
 #define Z_SAFE_HOMING
 
 #if ENABLED(Z_SAFE_HOMING)
-  #define Z_SAFE_HOMING_X_POINT X_CENTER  // (mm) X point for Z homing
-  #define Z_SAFE_HOMING_Y_POINT Y_CENTER  // (mm) Y point for Z homing
+  #define Z_SAFE_HOMING_X_POINT 110  // (mm) X point for Z homing
+  #define Z_SAFE_HOMING_Y_POINT 110  // (mm) Y point for Z homing
   //#define Z_SAFE_HOMING_POINT_ABSOLUTE  // Ignore home offsets (M206) for Z homing position
 #endif
 

@@ -20,7 +20,7 @@ on:
       d_routine_auto_offset:
         description: "D_ROUTINE_AUTO_OFFSET (Z offset, Delta pattern)"
         type: boolean
-        default: false
+        default: true
       dwin_custom_extrude:
         description: "DWIN_CUSTOM_EXTRUDE (custom extrude menu)"
         type: boolean
@@ -80,7 +80,7 @@ on:
       x_routine_auto_offset:
         description: "X_ROUTINE_AUTO_OFFSET (Z offset, X pattern)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read

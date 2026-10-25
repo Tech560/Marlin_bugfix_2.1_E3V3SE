@@ -15,7 +15,7 @@ MARKERS = {
     'Power-loss recovery': 'DWIN_PLR_MENU',
     'M413 S': 'POWER_LOSS_RECOVERY',
     'Input Shaping': 'DWIN_INPUT_SHAPING_MENU',
-    '5 points, X Routine': 'X_ROUTINE_AUTO_OFFSET',
+    '4 points, D Routine': 'D_ROUTINE_AUTO_OFFSET',
     'Printer Statistics': 'DWIN_STATS_MENU',
     'M852 I': 'SKEW_CORRECTION',
     'Skew': 'DWIN_SKEW_MENU',
