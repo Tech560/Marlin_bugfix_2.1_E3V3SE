@@ -118,8 +118,8 @@ Configuration.h E EXTRAPOLATE_BEYOND_GRID
 Configuration.h E ABL_BILINEAR_SUBDIVISION
 Configuration.h E BILINEAR_SUBDIVISIONS 4
 Configuration.h E Z_SAFE_HOMING
-Configuration.h E Z_SAFE_HOMING_X_POINT 110
-Configuration.h E Z_SAFE_HOMING_Y_POINT 110
+Configuration.h E Z_SAFE_HOMING_X_POINT 85.75
+Configuration.h E Z_SAFE_HOMING_Y_POINT 95
 Configuration.h E HOMING_FEEDRATE_MM_M { (50*60), (50*60), (12*60) }
 Configuration.h E SKEW_CORRECTION
 Configuration.h E XY_DIAG_AC 282.84

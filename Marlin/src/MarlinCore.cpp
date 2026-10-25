@@ -63,9 +63,6 @@
 #if ENABLED(DWIN_DIAG_LOG)
   #include "e3v3se/DiagLog.h"
 #endif
-#if ENABLED(E3V3SE_NOZZLE_AS_PROBE)
-  #include "e3v3se/ProbeXY.h"
-#endif
 
 #include "lcd/marlinui.h"
 #if HAS_TOUCH_BUTTONS
@@ -1415,10 +1412,6 @@ void setup() {
 
   SETUP_RUN(settings.first_load());   // Load data from EEPROM if available (or use defaults)
                                       // This also updates variables in the planner, elsewhere
-
-  #if ENABLED(E3V3SE_NOZZLE_AS_PROBE)
-    SETUP_RUN(e3v3se_clear_probe_xy()); // The nozzle is the probe: a stored XY offset may not shift homing
-  #endif
 
   #if ENABLED(CONFIGURABLE_MACHINE_NAME)
     SETUP_RUN(ui.reset_status(false)); // machine_name Initialized by settings.load()

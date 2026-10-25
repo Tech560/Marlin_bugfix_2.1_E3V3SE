@@ -1012,7 +1012,6 @@
 #define THERMAL_PROTECTION_HOTENDS // Enable thermal protection for all extruders
 #define THERMAL_PROTECTION_BED     // Enable thermal protection for the heated bed
 //#define E3V3SE_IGNORE_BED_MINTEMP // E3V3SE: Do not halt on a bed MINTEMP reading (flaky/missing bed sensor). Thermal runaway and heating-failed protection stay active.
-#define E3V3SE_NOZZLE_AS_PROBE   // E3V3SE: the nozzle is the Z probe, so a stored XY probe offset may not shift G28 and the mesh points
 #define THERMAL_PROTECTION_CHAMBER // Enable thermal protection for the heated chamber
 #define THERMAL_PROTECTION_COOLER  // Enable thermal protection for the laser cooling
 
@@ -2526,8 +2525,12 @@
 #define Z_SAFE_HOMING
 
 #if ENABLED(Z_SAFE_HOMING)
-  #define Z_SAFE_HOMING_X_POINT 110  // (mm) X point for Z homing
-  #define Z_SAFE_HOMING_Y_POINT 110  // (mm) Y point for Z homing
+  // G28 parks the nozzle at this point minus the probe's XY offset, which is
+  // NOZZLE_TO_PROBE_OFFSET (-24.25, -15) with PLATFORM_OFFSET. Compensate here
+  // so the nozzle still finishes Auto Home over the bed centre (110, 110)
+  // while the probe itself stays inside the bed for Z homing.
+  #define Z_SAFE_HOMING_X_POINT 85.75  // (mm) X point for Z homing (nozzle ends at 110)
+  #define Z_SAFE_HOMING_Y_POINT 95     // (mm) Y point for Z homing (nozzle ends at 110)
   //#define Z_SAFE_HOMING_POINT_ABSOLUTE  // Ignore home offsets (M206) for Z homing position
 #endif
 
