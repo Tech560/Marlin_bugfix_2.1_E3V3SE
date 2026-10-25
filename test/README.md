@@ -23,6 +23,10 @@ Run `python3 test/test_tower_gen.py` from the repository root. It compiles the p
 
 Run `python3 test/test_sd_files.py` from the repository root. It compiles the production deletion module with a stubbed card reader and checks that nothing is removed without a card, while printing, while a host job is paused, for a folder or without a selection, that a normal delete passes the 8.3 name on and is reported only once the entry is gone, that a refused removal is reported as failed, and that every result has a short LCD line. Set `E3V3SE_TEST_CXX` when the host compiler is not `g++`.
 
+### Settings backup to the SD card (host)
+
+Run `python3 test/test_settings_backup.py` from the repository root. It compiles the production backup module with a stubbed SD card, G-code handlers and machine state, and checks that a backup holds one command per value (Z-offset, home offsets, steps, feedrate, acceleration, skew, PID and one `M421` per mesh point), that every line is terminated and fits the line buffer, that nothing is written without a card or while printing, that a refused write is reported as a failure, and that a restore runs only the commands this module writes (a comment, an unknown command and a move in the file are skipped), finishes a last line without a newline, accepts CRLF, stores the result in EEPROM, and reports an empty file as such. Set `E3V3SE_TEST_CXX` when the host compiler is not `g++`.
+
 ### Marlin native unit tests
 
 Unit testing allows for functional testing of Marlin logic on a local machine. This strategy is available to all developers, and will be able to be used on generic GitHub workers to automate testing. While PlatformIO does support the execution of unit tests on target controllers, that is not yet implemented and not really practical. This would require dedicated testing labs, and would be less broadly usable than testing directly on the development or build machine.

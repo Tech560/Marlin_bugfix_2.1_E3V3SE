@@ -67,6 +67,9 @@ lin 3D Printer Firmware
 #if ENABLED(DWIN_DIAG_LOG)
 #include "../../../e3v3se/DiagLog.h"
 #endif
+#if ENABLED(DWIN_SETTINGS_BACKUP)
+#include "../../../e3v3se/SettingsBackup.h"
+#endif
 #if ENABLED(HOST_ACTION_COMMANDS)
 #include "../../../feature/host_actions.h"
 #endif
@@ -1592,7 +1595,10 @@ inline bool Apply_Encoder(const ENCODER_DiffState &encoder_diffState, T &valref)
 #define CONTROL_CASE_STATS (CONTROL_CASE_INFO + 1)
 #define CONTROL_CASE_PLR (CONTROL_CASE_STATS + ENABLED(DWIN_PLR_MENU))
 #define CONTROL_CASE_DIAG (CONTROL_CASE_PLR + ENABLED(DWIN_DIAG_LOG))
-#define CONTROL_CASE_TOTAL CONTROL_CASE_DIAG
+// Backup and restore of the settings on the SD card, one row each.
+#define CONTROL_CASE_BACKUP (CONTROL_CASE_DIAG + ENABLED(DWIN_SETTINGS_BACKUP))
+#define CONTROL_CASE_RESTORE (CONTROL_CASE_BACKUP + ENABLED(DWIN_SETTINGS_BACKUP))
+#define CONTROL_CASE_TOTAL CONTROL_CASE_RESTORE
 
 #define LEVEL_CASE_BEDVIS 4
 #define LEVEL_CASE_MESH      (3 + ENABLED(BED_LEVEL_VISUALIZER) + ENABLED(DWIN_MESH_HISTORY))
@@ -2189,6 +2195,16 @@ void Item_Control_Diag(const uint8_t row)
   }
 #endif
 
+#if ENABLED(DWIN_SETTINGS_BACKUP)
+  void Item_Control_Backup(const uint8_t row, const bool restore) {
+    Erase_Menu_Text(row);
+    if (HMI_flag.language < Language_Max) {
+      DWIN_Draw_Label(MBASE(row), restore ? F("Restore from SD") : F("Backup to SD"));
+    }
+    Draw_Menu_Line(row, restore ? ICON_ReadEEPROM : ICON_WriteEEPROM);
+  }
+#endif
+
 // Draw exactly one row of the Control list. Scrolling then repaints only the
 // row that moves into view instead of rebuilding the page, and the stock list
 // no longer loses the label of rows scrolled back up.
@@ -2241,6 +2257,10 @@ static void Draw_Control_Row(const uint8_t item, const uint8_t row) {
   #endif
   #if ENABLED(DWIN_DIAG_LOG)
     case CONTROL_CASE_DIAG: Item_Control_Diag(row); break;
+  #endif
+  #if ENABLED(DWIN_SETTINGS_BACKUP)
+    case CONTROL_CASE_BACKUP:  Item_Control_Backup(row, false); break;
+    case CONTROL_CASE_RESTORE: Item_Control_Backup(row, true); break;
   #endif
 
     default: break;
@@ -2339,6 +2359,12 @@ void Draw_Control_Menu()
 #if ENABLED(DWIN_DIAG_LOG)
   if (CVISI(CONTROL_CASE_DIAG))
     Item_Control_Diag(CSCROL(CONTROL_CASE_DIAG));
+#endif
+#if ENABLED(DWIN_SETTINGS_BACKUP)
+  if (CVISI(CONTROL_CASE_BACKUP))
+    Item_Control_Backup(CSCROL(CONTROL_CASE_BACKUP), false);
+  if (CVISI(CONTROL_CASE_RESTORE))
+    Item_Control_Backup(CSCROL(CONTROL_CASE_RESTORE), true);
 #endif
   if (select_control.now && CVISI(select_control.now))
     Draw_Menu_Cursor(CSCROL(select_control.now));
@@ -8556,6 +8582,19 @@ void HMI_Control()
       diag_flush();                       // save whatever we have, when idle
       Draw_DiagLog_Menu();
       break;
+#endif
+#if ENABLED(DWIN_SETTINGS_BACKUP)
+    case CONTROL_CASE_BACKUP:
+    case CONTROL_CASE_RESTORE:
+    {
+      // The backup writes the settings to the card, the restore replays them.
+      const settingsBackup::Result result = select_control.now == CONTROL_CASE_BACKUP
+                                          ? settingsBackup::save() : settingsBackup::restore();
+      HMI_AudioFeedback(settingsBackup::ok(result));
+      Clear_Title_Bar();
+      Draw_Title(settingsBackup::result_text(result));
+    }
+    break;
 #endif
     case 0: // Back
       select_page.set(2);

@@ -129,7 +129,7 @@
        //#define SHOW_CUSTOM_BOOTSCREEN    // Show the bitmap in Marlin/_Bootscreen.h on startup.
      #endif
    #endif
-@@ -1788,6 +1791,40 @@
+@@ -1788,6 +1791,48 @@
  
  #endif // HAS_DISPLAY
  
@@ -146,7 +146,7 @@
 +#endif
 +
 +// Keep the last few bed meshes on the SD card and show the drift between them
-+// in Leveling > Mesh History. Needs the Creality DWIN screen and bilinear ABL.
++// in Leveling > Mesh Data. Needs the Creality DWIN screen and bilinear ABL.
 +#define DWIN_MESH_HISTORY
 +#if ENABLED(DWIN_MESH_HISTORY) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(AUTO_BED_LEVELING_BILINEAR))
 +  #error "DWIN_MESH_HISTORY requires DWIN_CREALITY_LCD and AUTO_BED_LEVELING_BILINEAR."
@@ -157,6 +157,14 @@
 +#define DWIN_DIAG_LOG
 +#if ENABLED(DWIN_DIAG_LOG) && !ENABLED(DWIN_CREALITY_LCD)
 +  #error "DWIN_DIAG_LOG requires the Creality DWIN screen."
++#endif
++
++// Write the Z-offset, bed mesh and machine settings to settings.bak on the SD
++// card (Control > Backup to SD) and put them back after a firmware update
++// (Control > Restore from SD).
++#define DWIN_SETTINGS_BACKUP
++#if ENABLED(DWIN_SETTINGS_BACKUP) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(SDSUPPORT))
++  #error "DWIN_SETTINGS_BACKUP requires the Creality DWIN screen and SD support."
 +#endif
 +
 +// Generate a temperature tower G-code file from Prepare > Temp tower (M8025).
@@ -170,7 +178,7 @@
  // Some displays offer Feedrate / Flow editing.
  #if ANY(HAS_MARLINUI_MENU, DWIN_CREALITY_LCD, DWIN_LCD_PROUI, MALYAN_LCD, TOUCH_SCREEN, ULTIPANEL_FEEDMULTIPLY)
    #define SPEED_EDIT_MIN    10  // (%) Feedrate percentage edit range minimum
-@@ -1870,10 +1907,12 @@
+@@ -1870,10 +1915,12 @@
  
    #define SD_MENU_CONFIRM_START             // Confirm the selected SD file before printing
  
@@ -184,7 +192,7 @@
    //#define BROWSE_MEDIA_ON_INSERT          // Open the file browser when media is inserted
  
    //#define MEDIA_MENU_AT_TOP               // Force the media menu to be listed on the top of the main menu
-@@ -1900,8 +1939,11 @@
+@@ -1900,8 +1947,11 @@
     * an option on the LCD screen to continue the print from the last-known
     * point in the file.
     */
@@ -197,7 +205,7 @@
      #define PLR_ENABLED_DEFAULT       true // Power-Loss Recovery enabled by default. (Set with 'M413 Sn' & M500)
      //#define PLR_HEAT_BED_ON_REBOOT        // Heat up bed immediately on reboot to mitigate object detaching/warping.
      //#define PLR_HEAT_BED_EXTRA          0 // (°C) Relative increase of bed temperature for better adhesion (limited by max temp).
-@@ -1912,7 +1954,7 @@
+@@ -1912,7 +1962,7 @@
      //#define POWER_LOSS_PULLUP             // Set pullup / pulldown as appropriate for your sensor
      //#define POWER_LOSS_PULLDOWN
  
@@ -206,7 +214,7 @@
      //#define POWER_LOSS_PURGE_LEN    20    // (mm) Length of filament to purge on resume
  
      // Without a POWER_LOSS_PIN the following option helps reduce wear on the SD card,
-@@ -1954,25 +1996,21 @@
+@@ -1954,25 +2004,21 @@
     *  - SDSORT_CACHE_NAMES will retain the sorted file listing in RAM. (Expensive!)
     *  - SDSORT_DYNAMIC_RAM only uses RAM when the SD menu is visible. (Use with caution!)
     */
@@ -235,7 +243,7 @@
    #endif
  
    // Allow international symbols in long filenames. To display correctly, the
-@@ -1984,6 +2022,7 @@
+@@ -1984,6 +2030,7 @@
    //#define M20_TIMESTAMP_SUPPORT         // Include timestamps by adding the 'T' flag to M20 commands
  
    #define SCROLL_LONG_FILENAMES// Scroll long filenames in the SD card menu
@@ -243,7 +251,7 @@
  
    //#define SD_ABORT_NO_COOLDOWN          // Leave the heaters on after Stop Print (not recommended!)
  
-@@ -2400,6 +2439,7 @@
+@@ -2400,6 +2447,7 @@
   * Requires a display with a controllable backlight
   */
  //#define LCD_BACKLIGHT_TIMEOUT_MINS 1  // (minutes) Timeout before turning off the backlight
@@ -251,7 +259,7 @@
  
  #if defined(DISPLAY_SLEEP_MINUTES) || defined(LCD_BACKLIGHT_TIMEOUT_MINS)
    #define EDITABLE_DISPLAY_TIMEOUT      // Edit sleep / backlight timeout with M255 S<minutes> and a menu item
-@@ -2467,6 +2507,28 @@
+@@ -2467,6 +2515,28 @@
      //#define BABYSTEP_HOTEND_Z_OFFSET      // For multiple hotends, babystep relative Z offsets
      //#define BABYSTEP_GFX_OVERLAY          // Enable graphical overlay on Z-offset editor
    #endif
@@ -280,7 +288,7 @@
  #endif
  
  // @section extruder
-@@ -2582,7 +2644,11 @@
+@@ -2582,7 +2652,11 @@
    #define PROBING_MARGIN_LEFT PROBING_MARGIN
    #define PROBING_MARGIN_RIGHT PROBING_MARGIN+10
    #define PROBING_MARGIN_FRONT PROBING_MARGIN
@@ -292,7 +300,7 @@
  #endif
  
  #if ANY(MESH_BED_LEVELING, AUTO_BED_LEVELING_UBL)
-@@ -3467,6 +3533,10 @@
+@@ -3467,6 +3541,10 @@
    #define  X_SLAVE_ADDRESS 0x03
    #define  Y_SLAVE_ADDRESS 0x03
    #define  Z_SLAVE_ADDRESS 0x03
@@ -303,7 +311,7 @@
    //#define X2_SLAVE_ADDRESS 0
    //#define Y2_SLAVE_ADDRESS 0
    //#define Z2_SLAVE_ADDRESS 0
-@@ -3478,7 +3548,7 @@
+@@ -3478,7 +3556,7 @@
    //#define  U_SLAVE_ADDRESS 0
    //#define  V_SLAVE_ADDRESS 0
    //#define  W_SLAVE_ADDRESS 0
@@ -312,7 +320,7 @@
    //#define E1_SLAVE_ADDRESS 0
    //#define E2_SLAVE_ADDRESS 0
    //#define E3_SLAVE_ADDRESS 0
-@@ -4233,9 +4303,7 @@
+@@ -4233,9 +4311,7 @@
  #if ENABLED(GCODE_MACROS)
    #define GCODE_MACROS_SLOTS       5  // Up to 10 may be used
    #define GCODE_MACROS_SLOT_SIZE  50  // Maximum length of a single macro
@@ -322,7 +330,7 @@
  #endif
  
  /**
-@@ -4530,9 +4598,7 @@
+@@ -4530,9 +4606,7 @@
  #if ENABLED(FREEZE_FEATURE)
    //#define FREEZE_PIN   -1   // Override the default (KILL) pin here
    #define FREEZE_STATE  LOW   // State of pin indicating freeze
@@ -333,7 +341,7 @@
    /**
     * Command P000 (REALTIME_REPORTING_COMMANDS and EMERGENCY_PARSER) or
     * FREEZE_PIN (FREEZE_FEATURE) initiates a soft feed hold that keeps
-@@ -4545,9 +4611,7 @@
+@@ -4545,9 +4619,7 @@
     * NOTE: Affects Laser PWM but DOES NOT pause Spindle, Fans, Heaters or other devices.
     */
    //#define SOFT_FEED_HOLD

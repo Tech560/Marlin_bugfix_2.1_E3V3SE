@@ -1817,6 +1817,14 @@
   #error "DWIN_DIAG_LOG requires the Creality DWIN screen."
 #endif
 
+// Write the Z-offset, bed mesh and machine settings to settings.bak on the SD
+// card (Control > Backup to SD) and put them back after a firmware update
+// (Control > Restore from SD).
+#define DWIN_SETTINGS_BACKUP
+#if ENABLED(DWIN_SETTINGS_BACKUP) && (!ENABLED(DWIN_CREALITY_LCD) || !ENABLED(SDSUPPORT))
+  #error "DWIN_SETTINGS_BACKUP requires the Creality DWIN screen and SD support."
+#endif
+
 // Generate a temperature tower G-code file from Prepare > Temp tower (M8025).
 // The tower steps the nozzle temperature once per band so a spool can be tuned
 // without a slicer. Needs the Creality DWIN screen and a writable SD card.
