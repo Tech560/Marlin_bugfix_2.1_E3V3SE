@@ -318,17 +318,23 @@ void GcodeSuite::dwell(const millis_t time) {
     uint8_t retries = G29_MAX_RETRIES;
     #if ENABLED(DWIN_CREALITY_LCD)
       // The first-boot wizard levels right after it measured the Z offset and
-      // gives the user no way to intervene. Retrying there only repeats the
-      // nozzle wipe (M117 Probe failed. Rewiping.) for minutes and leaves the
-      // wizard unfinished, so every power-up would come back to it. Give the
-      // wizard a single attempt and hand the printer back to the menu.
+      // gives the user no way to intervene. G29_RECOVER_COMMANDS would answer a
+      // miss with M117 Probe failed. Rewiping. / G28 / G12 - minutes of nozzle
+      // wiping per attempt - and then halt, leaving the wizard unfinished so
+      // every power-up repeats it. The wizard gets one plain retry after a
+      // re-home and then hands the printer back to the menu.
       const bool boot_wizard = HMI_flag.Need_boot_flag;
-      if (boot_wizard) retries = 0;
+      if (boot_wizard) retries = 1;
     #endif
     while (G29()) {
       // G29 should return true for failed probes ONLY
       if (retries) {
-        event_probe_recover();
+        #if ENABLED(DWIN_CREALITY_LCD)
+          if (boot_wizard) process_subcommands_now(F("G28"));   // no hot wipe in the wizard
+          else event_probe_recover();
+        #else
+          event_probe_recover();
+        #endif
         --retries;
       }
       else {
