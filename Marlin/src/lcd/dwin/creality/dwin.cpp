@@ -14040,7 +14040,9 @@ void DWIN_CompletedLeveling()
  * failed. Without this the wizard stays unfinished, so every power-up runs it
  * again and Control and Leveling are never reachable. The stored settings are
  * reloaded so a half-done measurement (M8015 clears the Z offset and the mesh
- * before it starts) cannot leave the printer with a zero offset.
+ * before it starts) cannot leave the printer with a zero offset. A Z offset
+ * that the wizard did measure is put back afterwards and saved, so only the
+ * failed leveling is undone.
  */
 void DWIN_AbortBootWizard()
 {
@@ -14049,7 +14051,15 @@ void DWIN_AbortBootWizard()
   HMI_flag.Need_boot_flag = false;
   HMI_flag.local_leveling_flag = false;
   HMI_flag.Pressure_Height_end = false;
+  HMI_flag.G29_level_not_normal = false;   // the failed mesh is not a state to keep
+  const float measured_z = TERN0(HAS_BED_PROBE, probe.offset.z);
   TERN_(EEPROM_SETTINGS, (void)settings.load());
+  #if HAS_BED_PROBE
+    if (measured_z != 0) {
+      probe.offset.z = measured_z;
+      TERN_(EEPROM_SETTINGS, (void)settings.save());
+    }
+  #endif
   select_page.set(0);
   Goto_MainMenu();
 }

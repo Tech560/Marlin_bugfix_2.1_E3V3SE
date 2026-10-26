@@ -79,6 +79,10 @@ GcodeSuite gcode;
   #include "../lcd/dwin/creality/dwin.h"   // for the first-boot wizard
 #endif
 
+#if ENABLED(DWIN_DIAG_LOG)
+  #include "../e3v3se/DiagLog.h"
+#endif
+
 // Inactivity shutdown
 millis_t GcodeSuite::previous_move_ms = 0,
          GcodeSuite::max_inactive_time = 0;
@@ -297,6 +301,7 @@ void GcodeSuite::dwell(const millis_t time) {
         // it again and Control and Leveling can never be reached. Finish the
         // wizard instead and keep the printer usable.
         if (HMI_flag.Need_boot_flag) {
+          TERN_(DWIN_DIAG_LOG, diag_note(PSTR("Boot leveling failed")));
           DWIN_AbortBootWizard();
           return;
         }
@@ -311,29 +316,42 @@ void GcodeSuite::dwell(const millis_t time) {
 
   void GcodeSuite::G29_with_retry() {
     uint8_t retries = G29_MAX_RETRIES;
-    while (G29())
-  {
-    // G29 should return true for failed probes ONLY
-    if (retries)
-    {
-      event_probe_recover();
-      --retries;
+    #if ENABLED(DWIN_CREALITY_LCD)
+      // The first-boot wizard levels right after it measured the Z offset and
+      // gives the user no way to intervene. Retrying there only repeats the
+      // nozzle wipe (M117 Probe failed. Rewiping.) for minutes and leaves the
+      // wizard unfinished, so every power-up would come back to it. Give the
+      // wizard a single attempt and hand the printer back to the menu.
+      const bool boot_wizard = HMI_flag.Need_boot_flag;
+      if (boot_wizard) retries = 0;
+    #endif
+    while (G29()) {
+      // G29 should return true for failed probes ONLY
+      if (retries) {
+        event_probe_recover();
+        --retries;
+      }
+      else {
+        #if ENABLED(DWIN_CREALITY_LCD)
+          if (!boot_wizard) {
+            Popup_window_boot(Level_faild_QR); // 弹出调平失败二维码界面
+            delay(10);
+          }
+        #else
+          Popup_window_boot(Level_faild_QR); // 弹出调平失败二维码界面
+          delay(10);
+        #endif
+        event_probe_failure();
+        TERN_(DWIN_DIAG_LOG, diag_flush()); // keep the evidence on the card
+        return;
+      }
     }
-    else
-    {
-      // Leveling_Error();//调平失败弹出报错界面
-      Popup_window_boot(Level_faild_QR); // 弹出调平失败二维码界面
-      delay(10);
-      event_probe_failure();
-      return;
-    }
-  }
 
-  TERN_(HOST_PROMPT_SUPPORT, hostui.prompt_end());
+    TERN_(HOST_PROMPT_SUPPORT, hostui.prompt_end());
 
-#ifdef G29_SUCCESS_COMMANDS
-  process_subcommands_now_P(PSTR(G29_SUCCESS_COMMANDS));
-#endif
+    #ifdef G29_SUCCESS_COMMANDS
+      process_subcommands_now_P(PSTR(G29_SUCCESS_COMMANDS));
+    #endif
   }
 
 #endif // G29_RETRY_AND_RECOVER

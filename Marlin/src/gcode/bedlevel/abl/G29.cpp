@@ -53,6 +53,10 @@
 #elif ENABLED(DWIN_CREALITY_LCD)
   #include "../../../lcd/dwin/creality/dwin.h"
   #include "../../../lcd/dwin/creality/ui_position.h"
+
+  #if ENABLED(DWIN_DIAG_LOG)
+    #include "../../../e3v3se/DiagLog.h"
+  #endif
   
 #elif ENABLED(SOVOL_SV06_RTS)
   #include "../../../lcd/sovol_rts/sovol_rts.h"
@@ -804,6 +808,12 @@ G29_TYPE GcodeSuite::G29() {
           #endif
 
             if (isnan(abl.measured_z)) {  
+            // Leave a trace of where the probe gave up, for diag.log.
+            #if ENABLED(DWIN_DIAG_LOG)
+              diag_note_i(PSTR("G29 fail point"), G29_level_num);
+              diag_note_i(PSTR("G29 probe X"), (int32_t)abl.probePos.x);
+              diag_note_i(PSTR("G29 probe Y"), (int32_t)abl.probePos.y);
+            #endif
             HMI_flag.G29_level_not_normal=true; //g29 leveling is abnormal          
             set_bed_leveling_enabled(abl.reenable);
             Popup_Window_Leveling(); //Clear leveling interface
