@@ -357,6 +357,8 @@ The `c13_sd` branch (C13 SD card) ships a manual workflow, [`build-marlin.yml`](
 4. Click **Run workflow** and wait for the job to finish. The log ends with a RAM and flash usage report.
 5. Download the `firmware-c13_sd-STM32F103RET6_creality` artifact from the run summary. It contains the `firmware*.bin` file and is kept for 7 days.
 
+A ready build of the current branch is committed as [`FW_HWC13/D_c13_sd_20261026.bin`](FW_HWC13/D_c13_sd_20261026.bin) (269,168 bytes, MD5 `505425a4bdd0b48259e7916a586fdfe2`), built with the workflow defaults so `BED_LEVEL_VISUALIZER` is on. Flash that file directly when you do not want to run the workflow; it contains the reference-aligned Z homing, the completed first-boot wizard and the bed-mesh views.
+
 Each toggle only overrides the matching define for that single build; nothing is committed back to the repository. To make a choice permanent, edit the profile as described in [Configuration profiles](#configuration-profiles). Check the reported memory usage against the [Memory budget](#memory-budget) before flashing, and enable `DWIN_INPUT_SHAPING_MENU` only together with `FT_MOTION`, and `DWIN_SKEW_MENU` only together with `SKEW_CORRECTION`.
 
 ## Memory budget
