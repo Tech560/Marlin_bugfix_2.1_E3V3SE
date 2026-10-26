@@ -1996,7 +1996,7 @@
 #if ENABLED(DWIN_ZHOME_MENU)
   extern uint8_t CZ_AFTER_HOMING; 
 #endif
-#define XY_AFTER_HOMING { 110, 110 }  // (mm) Move to an XY position after homing (and raising Z)
+//#define XY_AFTER_HOMING { 10, 10 }  // (mm) Move to an XY position after homing (and raising Z)
 
 //#define EVENT_GCODE_AFTER_HOMING "M300 P440 S200"  // Commands to run after G28 (and move to XY_AFTER_HOMING)
 
@@ -2525,8 +2525,12 @@
 #define Z_SAFE_HOMING
 
 #if ENABLED(Z_SAFE_HOMING)
-  #define Z_SAFE_HOMING_X_POINT X_CENTER  // (mm) X point for Z homing
-  #define Z_SAFE_HOMING_Y_POINT Y_CENTER  // (mm) Y point for Z homing
+  // G28 moves the nozzle to this point minus the probe's XY offset, so this is
+  // where the PROBE homes Z. With NOZZLE_TO_PROBE_OFFSET {-24.25, -15, 0} the
+  // values 85.75/95 put the probe at 85.75/95 and the nozzle over 110/110, which
+  // is where Auto Home finishes: one move, no repositioning afterwards.
+  #define Z_SAFE_HOMING_X_POINT 85.75  // (mm) X point for Z homing (nozzle ends at 110)
+  #define Z_SAFE_HOMING_Y_POINT 95     // (mm) Y point for Z homing (nozzle ends at 110)
   //#define Z_SAFE_HOMING_POINT_ABSOLUTE  // Ignore home offsets (M206) for Z homing position
 #endif
 
